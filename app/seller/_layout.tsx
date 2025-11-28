@@ -6,7 +6,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export default function TabLayout() {
+export default function SellerTabLayout() {
   const colorScheme = useColorScheme();
 
   return (
@@ -17,26 +17,28 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
       }}>
       <Tabs.Screen
-        name="index"
+        name="home"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="chart.xyaxis.line" color={color} />,
         }}
       />
       <Tabs.Screen
         name="notifications"
         options={{
           title: 'Notifications',
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="bell.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="bell.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="account"
         options={{
           title: 'Account',
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="person.crop.circle" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="person.badge.key.fill" color={color} />,
         }}
       />
     </Tabs>
   );
 }
+
+
