@@ -8,7 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 export default function SplashScreen() {
   useEffect(() => {
     const timeout = setTimeout(() => {
-      router.replace('/login');
+    router.replace('/role-select');
     }, 1500);
 
     return () => clearTimeout(timeout);

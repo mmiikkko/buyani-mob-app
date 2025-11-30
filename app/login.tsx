@@ -1,7 +1,7 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Link, router, type Href } from 'expo-router';
-import React, { useState } from 'react';
+import { Link, router, useLocalSearchParams, type Href } from 'expo-router';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -13,11 +13,17 @@ import {
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { api } from '@/lib/api';
 
 export default function LoginScreen() {
+  const params = useLocalSearchParams<{ role?: 'customer' | 'seller' }>();
+  const initialRole = useMemo(
+    () => (params.role === 'seller' ? 'seller' : 'customer'),
+    [params.role],
+  );
+  const role: 'customer' | 'seller' = initialRole;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'customer' | 'seller'>('customer');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,15 +38,17 @@ export default function LoginScreen() {
     try {
       setLoading(true);
 
-      // TODO: Replace this with your real API call
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      const response = await api.login({ email, password, role });
+      
+      // Store the token
+      await api.setToken(response.token);
 
       // If successful, take the user into the correct area
       const destination: Href =
         role === 'seller' ? ('/seller' as Href) : ('/(tabs)' as Href);
       router.replace(destination);
-    } catch (e) {
-      setError('Something went wrong. Please try again.');
+    } catch (e: any) {
+      setError(e.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -52,6 +60,10 @@ export default function LoginScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
         bounces={false}>
+        <TouchableOpacity style={styles.backRow} onPress={() => router.replace('/role-select')}>
+          <FontAwesome name="chevron-left" size={16} color="#1f5f29" />
+          <ThemedText style={styles.backText}>Back</ThemedText>
+        </TouchableOpacity>
         <Image source={require('@/assets/images/Buyani.jpeg')} style={styles.logo} />
         <ThemedText type="title" style={styles.title}>
           Login
@@ -75,23 +87,6 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
         />
-
-        <ThemedText style={styles.switchLabel}>Log in as</ThemedText>
-        <View style={styles.roleSwitch}>
-          {(['customer', 'seller'] as const).map((option) => {
-            const isActive = role === option;
-            return (
-              <TouchableOpacity
-                key={option}
-                style={[styles.roleOption, isActive && styles.roleOptionActive]}
-                onPress={() => setRole(option)}>
-                <ThemedText style={isActive ? styles.roleOptionTextActive : styles.roleOptionText}>
-                  {option === 'customer' ? 'Customer' : 'Seller'}
-                </ThemedText>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
 
         {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
 
@@ -128,7 +123,7 @@ export default function LoginScreen() {
 
         <ThemedText style={styles.footerText}>
           Don&apos;t have an account?{' '}
-          <Link href="/signup">
+          <Link href={{ pathname: '/signup', params: { role } }}>
             <ThemedText type="defaultSemiBold" style={styles.linkText}>
               Sign up
             </ThemedText>
@@ -163,6 +158,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 24,
   },
+  backRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  backText: {
+    color: '#1f5f29',
+  },
   input: {
     borderBottomWidth: 1,
     borderBottomColor: '#C4C4C4',
@@ -194,34 +198,6 @@ const styles = StyleSheet.create({
     marginTop: 18,
     textAlign: 'center',
     color: '#8a8a8a',
-  },
-  switchLabel: {
-    fontSize: 14,
-    color: '#616161',
-    marginBottom: 8,
-  },
-  roleSwitch: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-  },
-  roleOption: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#d6d6d6',
-    borderRadius: 16,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  roleOptionActive: {
-    backgroundColor: '#2d8a34',
-    borderColor: '#2d8a34',
-  },
-  roleOptionText: {
-    color: '#616161',
-  },
-  roleOptionTextActive: {
-    color: '#fff',
   },
   socialRow: {
     flexDirection: 'row',
