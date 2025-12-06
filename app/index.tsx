@@ -1,27 +1,70 @@
-import React, { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import React, { useEffect } from 'react';
+import { Platform, StyleSheet } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 
 export default function SplashScreen() {
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-    router.replace('/role-select');
-    }, 1500);
+  const opacity = useSharedValue(0);
+  const containerOpacity = useSharedValue(1);
 
-    return () => clearTimeout(timeout);
+  useEffect(() => {
+    // Fade in animation
+    opacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.ease) });
+
+    // After showing for a bit, fade out smoothly before navigation
+    const fadeOutTimeout = setTimeout(() => {
+      containerOpacity.value = withTiming(
+        0,
+        {
+          duration: 500,
+          easing: Easing.inOut(Easing.ease),
+        },
+        () => {
+          // Navigate after fade out completes
+          router.replace('/login');
+        }
+      );
+    }, 1800);
+
+    return () => clearTimeout(fadeOutTimeout);
   }, []);
 
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  const containerAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: containerOpacity.value,
+  }));
+
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title" style={styles.title}>
-        BUYANI
-      </ThemedText>
-      <ThemedText style={styles.subtitle}>Connecting communities</ThemedText>
-      <ActivityIndicator size="large" style={styles.loader} />
-    </ThemedView>
+    <Animated.View style={[styles.container, containerAnimatedStyle]}>
+      <LinearGradient
+        colors={['#81C784', '#AED581', '#C5E1A5']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <Animated.View style={[styles.content, animatedStyle]}>
+        <Image 
+          source={require('@/assets/images/nobglogo.png')} 
+          style={styles.logo}
+          contentFit="contain"
+        />
+        <ThemedText type="title" style={styles.title}>
+          BUYANI
+        </ThemedText>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
@@ -29,18 +72,39 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 290,
+  },
+  content: {
+    alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
     gap: 12,
   },
+  logo: {
+    width: 140,
+    height: 140,
+  },
   title: {
-    letterSpacing: 2,
-  },
-  subtitle: {
-    opacity: 0.8,
-  },
-  loader: {
-    marginTop: 16,
+    letterSpacing: 4,
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    ...Platform.select({
+      ios: {
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 8,
+      },
+      android: {
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 8,
+        elevation: 4,
+      },
+      web: {
+        textShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+      },
+    }),
   },
 });
 

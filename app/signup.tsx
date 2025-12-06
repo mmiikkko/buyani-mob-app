@@ -1,15 +1,21 @@
-import { FontAwesome } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Link, router, useLocalSearchParams, type Href } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    ScrollView,
-    StyleSheet,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -22,41 +28,66 @@ export default function SignupScreen() {
     [params.role],
   );
   const role: 'customer' | 'seller' = initialRole;
-  const [name, setName] = useState('');
+  
+  // Customer fields
+  const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  
+  // Seller fields
   const [storeName, setStoreName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [businessCategory, setBusinessCategory] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isSeller = role === 'seller';
 
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(20);
+
+  useEffect(() => {
+    opacity.value = withTiming(1, {
+      duration: 600,
+      easing: Easing.out(Easing.ease),
+    });
+    translateY.value = withTiming(0, {
+      duration: 600,
+      easing: Easing.out(Easing.ease),
+    });
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
   const handleSignup = async () => {
     setError(null);
 
-    if (!email || !password || !confirmPassword) {
-      setError('Please fill in all required fields.');
-      return;
-    }
-
-    if (!isSeller && !name) {
-      setError('Please provide your name.');
-      return;
-    }
-
-    if (
-      isSeller &&
-      (!storeName || !ownerName || !phoneNumber || !businessCategory)
-    ) {
-      setError('Please complete the seller information.');
-      return;
+    if (isSeller) {
+      if (!email || !password || !confirmPassword || !storeName || !ownerName || !phoneNumber || !businessCategory) {
+        setError('Please fill in all required fields.');
+        return;
+      }
+    } else {
+      if (!username || !firstName || !lastName || !email || !password || !confirmPassword) {
+        setError('Please fill in all required fields.');
+        return;
+      }
     }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.');
       return;
     }
 
@@ -66,7 +97,10 @@ export default function SignupScreen() {
       const response = await api.signup({
         email,
         password,
-        name: isSeller ? undefined : name,
+        username: isSeller ? undefined : username,
+        firstName: isSeller ? undefined : firstName,
+        lastName: isSeller ? undefined : lastName,
+        name: isSeller ? ownerName : `${firstName} ${lastName}`,
         role,
         storeName: isSeller ? storeName : undefined,
         ownerName: isSeller ? ownerName : undefined,
@@ -77,27 +111,75 @@ export default function SignupScreen() {
       // Store the token
       await api.setToken(response.token);
 
-      // If successful, take the user into the relevant experience
-      const destination: Href =
-        role === 'seller' ? ('/seller' as Href) : ('/(tabs)' as Href);
-      router.replace(destination);
+      // Smooth fade-out transition before navigation
+      opacity.value = withTiming(0, {
+        duration: 300,
+        easing: Easing.in(Easing.ease),
+      });
+      translateY.value = withTiming(-20, {
+        duration: 300,
+        easing: Easing.in(Easing.ease),
+      });
+
+      // Navigate after animation completes
+      setTimeout(() => {
+        const destination: Href =
+          role === 'seller' ? ('/seller' as Href) : ('/(tabs)' as Href);
+        router.replace(destination);
+      }, 300);
     } catch (e: any) {
-      setError(e.message || 'Something went wrong. Please try again.');
-    } finally {
-      setLoading(false);
+      // Check if it's a network/server connection error
+      const isNetworkError = e.message?.includes('Cannot connect to server') || 
+                            e.message?.includes('Network request failed') ||
+                            e.message?.includes('Failed to fetch');
+      
+      if (isNetworkError) {
+        // For network errors, allow demo mode - store a demo token and proceed
+        // This allows users to see the UI even when backend is unavailable
+        await api.setToken('demo-token-offline-mode');
+        
+        // Show a warning but still proceed
+        setError(
+          '⚠️ Cannot connect to server. Continuing in offline mode. ' +
+          'Some features may not work until the server is available.'
+        );
+        
+        setLoading(false);
+        
+        // Navigate after a brief delay to show the warning
+        setTimeout(() => {
+          // Smooth fade-out transition before navigation
+          opacity.value = withTiming(0, {
+            duration: 300,
+            easing: Easing.in(Easing.ease),
+          });
+          translateY.value = withTiming(-20, {
+            duration: 300,
+            easing: Easing.in(Easing.ease),
+          });
+
+          setTimeout(() => {
+            const destination: Href =
+              role === 'seller' ? ('/seller' as Href) : ('/(tabs)' as Href);
+            router.replace(destination);
+          }, 300);
+        }, 1500);
+      } else {
+        // For other errors (validation, etc.), show the error
+        setError(e.message || 'Something went wrong. Please try again.');
+        setLoading(false);
+      }
     }
   };
 
   return (
     <ThemedView style={[styles.wrapper, isSeller && styles.wrapperSeller]}>
-      <ScrollView
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
-        bounces={false}>
-        <TouchableOpacity style={styles.backRow} onPress={() => router.replace('/role-select')}>
-          <FontAwesome name="chevron-left" size={16} color="#1f5f29" />
-          <ThemedText style={styles.backText}>Back</ThemedText>
-        </TouchableOpacity>
+      <Animated.View style={[{ flex: 1 }, animatedStyle]}>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+          showsVerticalScrollIndicator={false}>
         {isSeller ? (
           <>
             <View style={styles.sellerHeader}>
@@ -107,13 +189,12 @@ export default function SignupScreen() {
                 </ThemedText>
                 <ThemedText style={styles.sellerBrandAccent}>Seller Centre</ThemedText>
               </View>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => router.replace('/role-select')}>
-                <ThemedText style={styles.backButtonText}>Back to Marketplace</ThemedText>
-              </TouchableOpacity>
             </View>
-            <Image source={require('@/assets/images/Buyani.jpeg')} style={styles.sellerLogo} />
+            <Image 
+              source={require('@/assets/images/Buyani.jpeg')} 
+              style={styles.sellerLogo}
+              contentFit="contain"
+            />
 
             <View style={styles.sellerCard}>
               <ThemedText type="defaultSemiBold" style={styles.cardHeading}>
@@ -181,54 +262,112 @@ export default function SignupScreen() {
           </>
         ) : (
           <>
-            <Image source={require('@/assets/images/Buyani.jpeg')} style={styles.logo} />
-            <ThemedText type="title" style={styles.title}>
-              Register
-            </ThemedText>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Name"
-              placeholderTextColor="#8a8a8a"
-              value={name}
-              onChangeText={setName}
+            <View style={styles.headerContainer}>
+              <Image 
+              source={require('@/assets/images/Buyani.jpeg')} 
+              style={styles.logo}
+              contentFit="contain"
             />
+              <ThemedText type="title" style={styles.title}>
+                Create Account
+              </ThemedText>
+              <ThemedText style={styles.subtitle}>
+                Join Buyani and start shopping today
+              </ThemedText>
+            </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#8a8a8a"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              value={email}
-              onChangeText={setEmail}
-            />
+            <View style={styles.formContainer}>
+              <View style={styles.inputWrapper}>
+                <ThemedText style={styles.label}>Username</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your username"
+                  placeholderTextColor="#9CA3AF"
+                  autoCapitalize="none"
+                  value={username}
+                  onChangeText={setUsername}
+                />
+              </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Create Password"
-              placeholderTextColor="#8a8a8a"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+              <View style={styles.nameRow}>
+                <View style={[styles.inputWrapper, styles.nameInput]}>
+                  <ThemedText style={styles.label}>First Name</ThemedText>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="First name"
+                    placeholderTextColor="#9CA3AF"
+                    autoCapitalize="words"
+                    value={firstName}
+                    onChangeText={setFirstName}
+                  />
+                </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm Password"
-              placeholderTextColor="#8a8a8a"
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-            />
+                <View style={[styles.inputWrapper, styles.nameInput]}>
+                  <ThemedText style={styles.label}>Last Name</ThemedText>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Last name"
+                    placeholderTextColor="#9CA3AF"
+                    autoCapitalize="words"
+                    value={lastName}
+                    onChangeText={setLastName}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputWrapper}>
+                <ThemedText style={styles.label}>Email</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  placeholder="your@email.com"
+                  placeholderTextColor="#9CA3AF"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  value={email}
+                  onChangeText={setEmail}
+                />
+              </View>
+
+              <View style={styles.inputWrapper}>
+                <ThemedText style={styles.label}>Password</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Create a strong password"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
+                />
+              </View>
+
+              <View style={styles.inputWrapper}>
+                <ThemedText style={styles.label}>Confirm Password</ThemedText>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Re-enter your password"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                />
+              </View>
+            </View>
           </>
         )}
 
-        {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
+        {error ? (
+          <View style={styles.errorContainer}>
+            <ThemedText style={styles.errorText}>{error}</ThemedText>
+          </View>
+        ) : null}
 
-        <TouchableOpacity style={styles.button} onPress={handleSignup} disabled={loading}>
+        <TouchableOpacity 
+          style={[styles.button, loading && styles.buttonDisabled]} 
+          onPress={handleSignup} 
+          disabled={loading}
+          activeOpacity={0.8}>
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color="#fff" size="small" />
           ) : (
             <ThemedText type="defaultSemiBold" style={styles.buttonText}>
               {isSeller ? 'Create Seller Account' : 'Sign Up'}
@@ -243,24 +382,6 @@ export default function SignupScreen() {
           </ThemedText>
         </ThemedText>
 
-        {!isSeller && (
-          <>
-            <ThemedText style={styles.orText}>or</ThemedText>
-
-            <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.socialButton}>
-                <FontAwesome name="google" size={24} color="#DB4437" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton}>
-                <FontAwesome name="facebook" size={24} color="#1877F2" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton}>
-                <FontAwesome name="instagram" size={24} color="#C13584" />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-
         <ThemedText style={styles.footerText}>
           Already have an account?{' '}
           <Link href={{ pathname: '/login', params: { role } }}>
@@ -269,7 +390,8 @@ export default function SignupScreen() {
             </ThemedText>
           </Link>
         </ThemedText>
-      </ScrollView>
+        </ScrollView>
+      </Animated.View>
     </ThemedView>
   );
 }
@@ -277,113 +399,128 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
   },
   wrapperSeller: {
     backgroundColor: '#E9F6EC',
   },
   container: {
     flexGrow: 1,
-    paddingHorizontal: 32,
-    paddingVertical: 40,
-    paddingBottom: 80,
-    justifyContent: 'flex-start',
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+    paddingBottom: 40,
   },
-  title: {
-    marginBottom: 40,
-    color: '#276A2B',
-    fontSize: 28,
+  headerContainer: {
+    alignItems: 'center',
+    marginBottom: 32,
   },
   logo: {
-    width: 320,
-    height: 320,
-    borderRadius: 0,
-    alignSelf: 'center',
+    width: 120,
+    height: 120,
+    borderRadius: 12,
     marginBottom: 24,
   },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
+  title: {
+    marginBottom: 8,
+    color: '#276A2B',
+    fontSize: 32,
+    fontWeight: '700',
+    textAlign: 'center',
   },
-  backText: {
-    color: '#1f5f29',
+  subtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
   },
-  sellerLogo: {
-    width: 220,
-    height: 220,
-    alignSelf: 'center',
+  formContainer: {
+    marginBottom: 24,
+  },
+  inputWrapper: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
   },
   input: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#C4C4C4',
-    paddingVertical: 12,
-    marginBottom: 28,
-    fontSize: 16,
-  },
-  sellerInput: {
-    borderWidth: 1,
-    borderColor: '#d7e3d0',
-    borderRadius: 16,
-    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: '#f7fbf4',
     fontSize: 16,
-    marginBottom: 16,
+    backgroundColor: '#FFFFFF',
+    color: '#111827',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  nameInput: {
+    flex: 1,
   },
   button: {
     marginTop: 8,
+    marginBottom: 16,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
     backgroundColor: '#F5821F',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#F5821F',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+      web: {
+        boxShadow: '0px 4px 8px 0px rgba(245, 130, 31, 0.3)',
+      },
+    }),
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: '600',
   },
   termsCopy: {
-    marginTop: 16,
+    marginTop: 8,
+    marginBottom: 24,
     textAlign: 'center',
     fontSize: 12,
-    color: '#696969',
+    color: '#6B7280',
+    lineHeight: 18,
   },
   linkText: {
     color: '#F5821F',
   },
-  orText: {
-    marginTop: 18,
-    textAlign: 'center',
-    color: '#8a8a8a',
-  },
-  socialRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    marginTop: 18,
-    marginBottom: 24,
-  },
-  socialButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F5F5F5',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
   footerText: {
     textAlign: 'center',
-    color: '#696969',
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  errorContainer: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
   },
   errorText: {
-    color: 'red',
-    marginBottom: 8,
+    color: '#DC2626',
+    fontSize: 14,
+    textAlign: 'center',
   },
+  // Seller styles
   sellerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -392,41 +529,58 @@ const styles = StyleSheet.create({
   },
   sellerBrand: {
     color: '#1f5f29',
+    fontSize: 28,
   },
   sellerBrandAccent: {
     color: '#f5821f',
     fontSize: 16,
   },
-  backButton: {
-    borderWidth: 1,
-    borderColor: '#1f5f29',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  backButtonText: {
-    color: '#1f5f29',
-    fontSize: 12,
+  sellerLogo: {
+    width: 180,
+    height: 180,
+    alignSelf: 'center',
+    marginBottom: 24,
+    borderRadius: 12,
   },
   sellerCard: {
     marginTop: 16,
     backgroundColor: '#fff',
     borderRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    padding: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: '0px 4px 8px 0px rgba(0, 0, 0, 0.08)',
+      },
+    }),
   },
   cardHeading: {
-    fontSize: 20,
+    fontSize: 22,
     color: '#1f5f29',
+    marginBottom: 4,
   },
   cardSubtext: {
     color: '#6a7567',
+    marginBottom: 20,
+    fontSize: 14,
+  },
+  sellerInput: {
+    borderWidth: 1.5,
+    borderColor: '#d7e3d0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#f7fbf4',
+    fontSize: 16,
     marginBottom: 16,
+    color: '#111827',
   },
 });
-
-

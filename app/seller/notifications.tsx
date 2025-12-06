@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, FlatList, View } from 'react-native';
+import { StyleSheet, FlatList, View, Platform } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -49,12 +49,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
     gap: 6,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0px 3px 6px 0px rgba(0, 0, 0, 0.08)',
+      },
+    }),
   },
   body: {
     color: '#555',

@@ -1,15 +1,22 @@
-import { FontAwesome } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Link, router, useLocalSearchParams, type Href } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -26,6 +33,26 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(20);
+
+  useEffect(() => {
+    opacity.value = withTiming(1, {
+      duration: 600,
+      easing: Easing.out(Easing.ease),
+    });
+    translateY.value = withTiming(0, {
+      duration: 600,
+      easing: Easing.out(Easing.ease),
+    });
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
 
   const handleLogin = async () => {
     setError(null);
@@ -43,93 +70,167 @@ export default function LoginScreen() {
       // Store the token
       await api.setToken(response.token);
 
-      // If successful, take the user into the correct area
-      const destination: Href =
-        role === 'seller' ? ('/seller' as Href) : ('/(tabs)' as Href);
-      router.replace(destination);
+      // Smooth fade-out transition before navigation
+      opacity.value = withTiming(0, {
+        duration: 300,
+        easing: Easing.in(Easing.ease),
+      });
+      translateY.value = withTiming(-20, {
+        duration: 300,
+        easing: Easing.in(Easing.ease),
+      });
+
+      // Navigate after animation completes
+      setTimeout(() => {
+        const destination: Href =
+          role === 'seller' ? ('/seller' as Href) : ('/(tabs)' as Href);
+        router.replace(destination);
+      }, 300);
     } catch (e: any) {
-      setError(e.message || 'Something went wrong. Please try again.');
-    } finally {
-      setLoading(false);
+      // Check if it's a network/server connection error
+      const isNetworkError = e.message?.includes('Cannot connect to server') || 
+                            e.message?.includes('Network request failed') ||
+                            e.message?.includes('Failed to fetch');
+      
+      if (isNetworkError) {
+        // For network errors, allow demo mode - store a demo token and proceed
+        // This allows users to see the UI even when backend is unavailable
+        await api.setToken('demo-token-offline-mode');
+        
+        // Show a warning but still proceed
+        setError(
+          '⚠️ Cannot connect to server. Continuing in offline mode. ' +
+          'Some features may not work until the server is available.'
+        );
+        
+        setLoading(false);
+        
+        // Navigate after a brief delay to show the warning
+        setTimeout(() => {
+          // Smooth fade-out transition before navigation
+          opacity.value = withTiming(0, {
+            duration: 300,
+            easing: Easing.in(Easing.ease),
+          });
+          translateY.value = withTiming(-20, {
+            duration: 300,
+            easing: Easing.in(Easing.ease),
+          });
+
+          setTimeout(() => {
+            const destination: Href =
+              role === 'seller' ? ('/seller' as Href) : ('/(tabs)' as Href);
+            router.replace(destination);
+          }, 300);
+        }, 1500);
+      } else {
+        // For other errors (invalid credentials, etc.), show the error
+        setError(e.message || 'Something went wrong. Please try again.');
+        setLoading(false);
+      }
     }
   };
 
   return (
     <ThemedView style={styles.wrapper}>
-      <ScrollView
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
-        bounces={false}>
-        <TouchableOpacity style={styles.backRow} onPress={() => router.replace('/role-select')}>
-          <FontAwesome name="chevron-left" size={16} color="#1f5f29" />
-          <ThemedText style={styles.backText}>Back</ThemedText>
-        </TouchableOpacity>
-        <Image source={require('@/assets/images/Buyani.jpeg')} style={styles.logo} />
-        <ThemedText type="title" style={styles.title}>
-          Login
-        </ThemedText>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#8a8a8a"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#8a8a8a"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
-
-        <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <ThemedText type="defaultSemiBold" style={styles.buttonText}>
-              Log In
+      <Animated.View style={[{ flex: 1 }, animatedStyle]}>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+          showsVerticalScrollIndicator={false}>
+          <View style={styles.headerContainer}>
+            <Image 
+              source={require('@/assets/images/Buyani.jpeg')} 
+              style={styles.logo}
+              contentFit="contain"
+            />
+            <ThemedText type="title" style={styles.title}>
+              Welcome Back
             </ThemedText>
-          )}
-        </TouchableOpacity>
+            <ThemedText style={styles.subtitle}>
+              Sign in to continue to Buyani
+            </ThemedText>
+          </View>
 
-        <ThemedText style={styles.termsCopy}>
-          By logging in, you agree to our{' '}
-          <ThemedText type="defaultSemiBold" style={styles.linkText}>
-            Terms & Privacy Policy
-          </ThemedText>
-        </ThemedText>
+          <View style={styles.formContainer}>
+            <View style={styles.inputWrapper}>
+              <ThemedText style={styles.label}>Email</ThemedText>
+              <TextInput
+                style={styles.input}
+                placeholder="your@email.com"
+                placeholderTextColor="#9CA3AF"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+                autoComplete="email"
+              />
+            </View>
 
-        <ThemedText style={styles.orText}>or</ThemedText>
+            <View style={styles.inputWrapper}>
+              <ThemedText style={styles.label}>Password</ThemedText>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                  autoComplete="password"
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword(!showPassword)}
+                  activeOpacity={0.7}>
+                  <Ionicons 
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
+                    size={20} 
+                    color="#6B7280" 
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
 
-        <View style={styles.socialRow}>
-          <TouchableOpacity style={styles.socialButton}>
-            <FontAwesome name="google" size={24} color="#DB4437" />
+          {error ? (
+            <View style={styles.errorContainer}>
+              <ThemedText style={styles.errorText}>{error}</ThemedText>
+            </View>
+          ) : null}
+
+          <TouchableOpacity 
+            style={[styles.button, loading && styles.buttonDisabled]} 
+            onPress={handleLogin} 
+            disabled={loading}
+            activeOpacity={0.8}>
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <ThemedText type="defaultSemiBold" style={styles.buttonText}>
+                Log In
+              </ThemedText>
+            )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.socialButton}>
-            <FontAwesome name="facebook" size={24} color="#1877F2" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialButton}>
-            <FontAwesome name="instagram" size={24} color="#C13584" />
-          </TouchableOpacity>
-        </View>
 
-        <ThemedText style={styles.footerText}>
-          Don&apos;t have an account?{' '}
-          <Link href={{ pathname: '/signup', params: { role } }}>
+          <ThemedText style={styles.termsCopy}>
+            By logging in, you agree to our{' '}
             <ThemedText type="defaultSemiBold" style={styles.linkText}>
-              Sign up
+              Terms & Privacy Policy
             </ThemedText>
-          </Link>
-        </ThemedText>
-      </ScrollView>
+          </ThemedText>
+
+          <ThemedText style={styles.footerText}>
+            Don&apos;t have an account?{' '}
+            <Link href={{ pathname: '/signup', params: { role } }}>
+              <ThemedText type="defaultSemiBold" style={styles.linkText}>
+                Sign up
+              </ThemedText>
+            </Link>
+          </ThemedText>
+        </ScrollView>
+      </Animated.View>
     </ThemedView>
   );
 }
@@ -137,95 +238,135 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
   },
   container: {
     flexGrow: 1,
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
     paddingVertical: 40,
-    paddingBottom: 80,
-    justifyContent: 'flex-start',
+    paddingBottom: 60,
   },
-  title: {
+  headerContainer: {
+    alignItems: 'center',
     marginBottom: 40,
-    color: '#276A2B',
-    fontSize: 28,
   },
   logo: {
-    width: 320,
-    height: 320,
-    borderRadius: 0,
-    alignSelf: 'center',
+    width: 140,
+    height: 140,
+    borderRadius: 12,
     marginBottom: 24,
   },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
+  title: {
+    marginBottom: 8,
+    color: '#276A2B',
+    fontSize: 32,
+    fontWeight: '700',
+    textAlign: 'center',
   },
-  backText: {
-    color: '#1f5f29',
+  subtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  formContainer: {
+    marginBottom: 24,
+  },
+  inputWrapper: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
   },
   input: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#C4C4C4',
-    paddingVertical: 12,
-    marginBottom: 28,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     fontSize: 16,
+    backgroundColor: '#FFFFFF',
+    color: '#111827',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#111827',
+  },
+  eyeButton: {
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   button: {
     marginTop: 8,
+    marginBottom: 16,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
     backgroundColor: '#F5821F',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#F5821F',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+      web: {
+        boxShadow: '0px 4px 8px 0px rgba(245, 130, 31, 0.3)',
+      },
+    }),
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: '600',
   },
   termsCopy: {
-    marginTop: 16,
+    marginTop: 8,
+    marginBottom: 24,
     textAlign: 'center',
     fontSize: 12,
-    color: '#696969',
+    color: '#6B7280',
+    lineHeight: 18,
   },
   linkText: {
     color: '#F5821F',
   },
-  orText: {
-    marginTop: 18,
-    textAlign: 'center',
-    color: '#8a8a8a',
-  },
-  socialRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    marginTop: 18,
-    marginBottom: 24,
-  },
-  socialButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F5F5F5',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
   footerText: {
     textAlign: 'center',
-    color: '#696969',
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  errorContainer: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
   },
   errorText: {
-    color: 'red',
-    marginBottom: 8,
+    color: '#DC2626',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
-
-

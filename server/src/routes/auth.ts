@@ -11,7 +11,19 @@ const router = express.Router();
 // Register endpoint
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, name, role, storeName, ownerName, phoneNumber, businessCategory } = req.body;
+    const { 
+      email, 
+      password, 
+      username, 
+      firstName, 
+      lastName, 
+      name, 
+      role, 
+      storeName, 
+      ownerName, 
+      phoneNumber, 
+      businessCategory 
+    } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -19,6 +31,10 @@ router.post('/register', async (req, res) => {
 
     if (role === 'seller' && (!storeName || !ownerName || !phoneNumber || !businessCategory)) {
       return res.status(400).json({ error: 'All seller fields are required' });
+    }
+
+    if (role === 'customer' && (!username || !firstName || !lastName)) {
+      return res.status(400).json({ error: 'Username, first name, and last name are required' });
     }
 
     // Check if user already exists
@@ -35,13 +51,17 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Determine user name and role
-    const userName = role === 'customer' ? name : ownerName;
+    const userName = role === 'customer' 
+      ? (username || `${firstName} ${lastName}`.trim() || email)
+      : ownerName;
     const userRole = role === 'seller' ? USER_ROLES.SELLER : USER_ROLES.CUSTOMER;
 
     // Create user
     await db.insert(user).values({
       id: userId,
       name: userName || email,
+      first_name: role === 'customer' ? firstName : null,
+      last_name: role === 'customer' ? lastName : null,
       email,
       role: userRole,
       emailVerified: false,

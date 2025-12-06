@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, ScrollView, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedView } from '@/components/themed-view';
@@ -88,11 +88,20 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 18,
     backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.07,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0px 3px 6px 0px rgba(0, 0, 0, 0.07)',
+      },
+    }),
   },
   metricLabel: {
     fontSize: 12,
@@ -114,12 +123,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 20,
     padding: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
     gap: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0px 4px 8px 0px rgba(0, 0, 0, 0.06)',
+      },
+    }),
   },
   orderRow: {
     flexDirection: 'row',

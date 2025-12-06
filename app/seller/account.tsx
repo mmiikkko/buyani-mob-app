@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Platform } from 'react-native';
 import { router } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
@@ -86,11 +86,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 20,
     padding: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 1,
+      },
+      web: {
+        boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.05)',
+      },
+    }),
   },
   menuItem: {
     flexDirection: 'row',
