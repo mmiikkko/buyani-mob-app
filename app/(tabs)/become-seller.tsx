@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Platform,
   ScrollView,
@@ -9,12 +11,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTabBar } from '@/contexts/tab-bar-context';
+
+const SHOP_REGISTRATION_KEY = 'shop_registration';
+
+interface ShopRegistration {
+  shopName: string;
+  shopDescription: string;
+  status?: 'pending' | 'approved';
+}
 
 export default function BecomeSellerScreen() {
   const insets = useSafeAreaInsets();
@@ -22,6 +31,34 @@ export default function BecomeSellerScreen() {
   const [shopName, setShopName] = useState('');
   const [shopDescription, setShopDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [registeredShop, setRegisteredShop] = useState<ShopRegistration | null>(null);
+  const [isLoadingRegistration, setIsLoadingRegistration] = useState(true);
+
+  // Check if shop is already registered on mount
+  useEffect(() => {
+    const checkRegistration = async () => {
+      try {
+        const registrationData = await AsyncStorage.getItem(SHOP_REGISTRATION_KEY);
+        if (registrationData) {
+          const registration: ShopRegistration = JSON.parse(registrationData);
+          // Default to approved if status is not set (for existing registrations)
+          if (!registration.status) {
+            registration.status = 'approved';
+            await AsyncStorage.setItem(SHOP_REGISTRATION_KEY, JSON.stringify(registration));
+          }
+          setRegisteredShop(registration);
+          setIsRegistered(true);
+        }
+      } catch (error) {
+        console.error('Error checking registration:', error);
+      } finally {
+        setIsLoadingRegistration(false);
+      }
+    };
+
+    checkRegistration();
+  }, []);
 
   // Hide tab bar immediately when screen is focused
   useFocusEffect(
@@ -42,15 +79,153 @@ export default function BecomeSellerScreen() {
     setLoading(true);
     // TODO: Implement API call to register shop
     console.log('Registering shop:', { shopName, shopDescription });
-    setTimeout(() => {
+    
+    // Save registration to AsyncStorage with approved status
+    const registration: ShopRegistration = {
+      shopName: shopName.trim(),
+      shopDescription: shopDescription.trim(),
+      status: 'approved', // Set to approved for testing
+    };
+    
+    try {
+      await AsyncStorage.setItem(SHOP_REGISTRATION_KEY, JSON.stringify(registration));
+      setRegisteredShop(registration);
+      setIsRegistered(true);
       setLoading(false);
-      router.push({
-        pathname: '/(tabs)/shop-application-status',
-        params: { shopName: shopName.trim() },
-      });
-    }, 1000);
+    } catch (error) {
+      console.error('Error saving registration:', error);
+      setLoading(false);
+      alert('Failed to save registration. Please try again.');
+    }
   };
 
+  // Show loading state while checking registration
+  if (isLoadingRegistration) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.push('/(tabs)/account')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ThemedText>Loading...</ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  // Show status card if already registered
+  if (isRegistered && registeredShop) {
+    return (
+      <ThemedView style={styles.container}>
+        {/* Back Button */}
+        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.push('/(tabs)/account')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: 20, paddingBottom: insets.bottom + 40 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Status Card */}
+          <View style={styles.statusCard}>
+            {/* Title Section */}
+            <View style={styles.titleSection}>
+              <ThemedText type="title" style={styles.mainTitle}>
+                Shop Application Status
+              </ThemedText>
+              <ThemedText style={styles.subtitle}>
+                Your shop application status
+              </ThemedText>
+            </View>
+
+            {/* Shop Information Section */}
+            <View style={styles.infoSection}>
+              <ThemedText style={styles.label}>Shop Name:</ThemedText>
+              <ThemedText type="defaultSemiBold" style={styles.shopName}>
+                {registeredShop.shopName}
+              </ThemedText>
+            </View>
+
+            {/* Shop Description Section */}
+            <View style={styles.infoSection}>
+              <ThemedText style={styles.label}>Shop Description:</ThemedText>
+              <ThemedText style={styles.shopDescription}>
+                {registeredShop.shopDescription}
+              </ThemedText>
+            </View>
+
+            {/* Status Section */}
+            <View style={styles.statusSection}>
+              <ThemedText style={styles.label}>Status:</ThemedText>
+              <View style={[
+                styles.statusBadge,
+                registeredShop.status === 'approved' && styles.statusBadgeApproved
+              ]}>
+                <ThemedText type="defaultSemiBold" style={styles.statusText}>
+                  {registeredShop.status === 'approved' ? 'Approved' : 'Pending Approval'}
+                </ThemedText>
+              </View>
+            </View>
+
+            {/* Informational Message */}
+            <View style={styles.messageSection}>
+              <ThemedText style={styles.messageText}>
+                {registeredShop.status === 'approved' 
+                  ? 'Congratulations! Your shop application has been approved. You can now start selling on our platform.'
+                  : 'Your shop application is being reviewed. You will be notified once it\'s approved.'}
+              </ThemedText>
+            </View>
+
+            {/* Divider */}
+            <View style={styles.divider} />
+
+            {/* Footer */}
+            <View style={styles.footer}>
+              {registeredShop.status === 'approved' ? (
+                <>
+                  <TouchableOpacity 
+                    style={styles.sellerDashboardButton}
+                    onPress={() => router.push('/seller/home')}
+                  >
+                    <ThemedText type="defaultSemiBold" style={styles.sellerDashboardButtonText}>
+                      Go to Seller Dashboard
+                    </ThemedText>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.footerLinkButton}
+                    onPress={() => router.push('/(tabs)')}
+                  >
+                    <ThemedText style={styles.footerLink}>Return to home</ThemedText>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity onPress={() => router.push('/(tabs)')}>
+                  <ThemedText style={styles.footerLink}>Return to home</ThemedText>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </ScrollView>
+      </ThemedView>
+    );
+  }
+
+  // Show form if not registered
   return (
     <ThemedView style={styles.container}>
       {/* Back Button */}
@@ -291,6 +466,108 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#4A90E2',
     textDecorationLine: 'underline',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusCard: {
+    width: '100%',
+    maxWidth: 600,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+      web: {
+        boxShadow: '0px 2px 8px 0px rgba(0, 0, 0, 0.1)',
+      },
+    }),
+  },
+  infoSection: {
+    marginBottom: 20,
+  },
+  shopName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+  },
+  shopDescription: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 22,
+    marginTop: 8,
+  },
+  statusSection: {
+    marginBottom: 24,
+  },
+  statusBadge: {
+    backgroundColor: '#FFF9C4',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  statusBadgeApproved: {
+    backgroundColor: '#C8E6C9',
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  messageSection: {
+    marginBottom: 24,
+  },
+  messageText: {
+    fontSize: 15,
+    color: '#666',
+    lineHeight: 22,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginBottom: 24,
+  },
+  sellerDashboardButton: {
+    backgroundColor: '#2E7D32',
+    borderRadius: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    marginBottom: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#2E7D32',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: '0px 2px 4px 0px rgba(46, 125, 50, 0.3)',
+      },
+    }),
+  },
+  sellerDashboardButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  footerLinkButton: {
+    marginTop: 8,
   },
 });
 

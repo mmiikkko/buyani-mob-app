@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { StyleSheet, FlatList, View, TouchableOpacity, Platform, ScrollView } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, FlatList, View, TouchableOpacity, Platform, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,80 +8,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTabBar } from '@/contexts/tab-bar-context';
+import { api, type Product, type Category } from '@/lib/api';
 
-// Mock data - Replace with API calls later
-const ALL_PRODUCTS = [
-  {
-    id: '1',
-    name: 'test67',
-    price: 'P123.00',
-    shopName: 'My Shop Name',
-    image: require('@/assets/images/react-logo.png'),
-  },
-  {
-    id: '2',
-    name: 'test product',
-    price: 'P1.00',
-    shopName: 'Martin Shop',
-    image: null,
-  },
-  {
-    id: '3',
-    name: 'test 8',
-    price: 'P89.00',
-    shopName: 'My Shop Name',
-    image: null,
-  },
-  {
-    id: '4',
-    name: 'test 5',
-    price: 'P123.00',
-    shopName: 'My Shop Name',
-    image: null,
-  },
-  {
-    id: '5',
-    name: 'Fresh Kale Bundle',
-    price: 'P220.00',
-    shopName: 'Farm Fresh',
-    image: null,
-  },
-  {
-    id: '6',
-    name: 'Dried Pineapple Pack',
-    price: 'P95.00',
-    shopName: 'Tropical Treats',
-    image: null,
-  },
-  {
-    id: '7',
-    name: 'Crochet Keychain',
-    price: 'P45.00',
-    shopName: 'Handmade Crafts',
-    image: null,
-  },
-  {
-    id: '8',
-    name: 'Organic Bananas',
-    price: 'P150.00',
-    shopName: 'Green Market',
-    image: null,
-  },
-];
+function ProductCard({ item }: { item: Product }) {
+  const imageUrl = item.images && item.images.length > 0 && item.images[0].image_url 
+    ? item.images[0].image_url[0] 
+    : null;
 
-function ProductCard({ item }: { item: (typeof ALL_PRODUCTS)[number] }) {
   return (
     <TouchableOpacity
       style={styles.productCard}
       activeOpacity={0.85}
       onPress={() => {
         // TODO: Navigate to product detail page
-        console.log(`Product ${item.name} pressed`);
+        console.log(`Product ${item.productName} pressed`);
       }}
     >
       <View style={styles.productImageContainer}>
-        {item.image ? (
-          <Image source={item.image} style={styles.productImage} contentFit="cover" />
+        {imageUrl ? (
+          <Image source={{ uri: imageUrl }} style={styles.productImage} contentFit="cover" />
         ) : (
           <LinearGradient
             colors={['#E8F5E9', '#C8E6C9', '#A5D6A7']}
@@ -97,10 +42,10 @@ function ProductCard({ item }: { item: (typeof ALL_PRODUCTS)[number] }) {
       </View>
       <View style={styles.productInfo}>
         <ThemedText type="defaultSemiBold" style={styles.productName} numberOfLines={2}>
-          {item.name}
+          {item.productName}
         </ThemedText>
         <View style={styles.priceContainer}>
-          <ThemedText style={styles.productPrice}>{item.price}</ThemedText>
+          <ThemedText style={styles.productPrice}>P{Number(item.price).toFixed(2)}</ThemedText>
         </View>
         <View style={styles.shopContainer}>
           <Ionicons name="storefront-outline" size={12} color="#999" />
@@ -118,6 +63,49 @@ export default function AllProductsScreen() {
   const { isVisible, setIsVisible } = useTabBar();
   const scrollY = useRef(0);
   const [lastScrollY, setLastScrollY] = useState(0);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const [productsData, categoriesData] = await Promise.all([
+          api.getProducts(),
+          api.getCategories(true).catch(() => []),
+        ]);
+        setAllProducts(productsData);
+        setProducts(productsData);
+        setCategories(categoriesData);
+      } catch (err: any) {
+        console.error('Error fetching data:', err);
+        setError(err.message || 'Failed to load products');
+        setProducts([]);
+        setAllProducts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (selectedCategory) {
+      const filtered = allProducts.filter(
+        (product) => product.categoryId === selectedCategory
+      );
+      setProducts(filtered);
+    } else {
+      setProducts(allProducts);
+    }
+  }, [selectedCategory, allProducts]);
 
   const handleScroll = (event: any) => {
     const currentScrollY = event.nativeEvent.contentOffset.y;
@@ -154,7 +142,7 @@ export default function AllProductsScreen() {
         colors={['#50C878', '#40B068', '#35A05A']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.headerGradient, { paddingTop: insets.top + 28 }]}
+        style={[styles.headerGradient, { paddingTop: insets.top + 48 }]}
       >
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
@@ -166,43 +154,188 @@ export default function AllProductsScreen() {
                 All Products
               </ThemedText>
               <ThemedText style={styles.headerSubtitle}>
-                {ALL_PRODUCTS.length} amazing products
+                {loading ? 'Loading...' : `${products.length} amazing products`}
               </ThemedText>
             </View>
           </View>
-          <TouchableOpacity style={styles.filterButton} activeOpacity={0.7}>
-            <Ionicons name="options-outline" size={22} color="#fff" />
+          <TouchableOpacity 
+            style={[styles.filterButton, showDropdown && styles.filterButtonActive]} 
+            activeOpacity={0.7}
+            onPress={() => setShowDropdown(!showDropdown)}
+          >
+            <Ionicons 
+              name={showDropdown ? "close" : "options-outline"} 
+              size={22} 
+              color="#fff" 
+            />
+            {selectedCategory && !showDropdown && (
+              <View style={styles.filterBadge}>
+                <View style={styles.filterBadgeDot} />
+              </View>
+            )}
           </TouchableOpacity>
         </View>
       </LinearGradient>
 
-      <FlatList
-        data={ALL_PRODUCTS}
-        renderItem={({ item }) => <ProductCard item={item} />}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={styles.row}
-        contentContainerStyle={[
-          styles.list,
-          { paddingBottom: insets.bottom + 20 },
-        ]}
-        showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
-              <Ionicons name="cube-outline" size={64} color="#ccc" />
-            </View>
-            <ThemedText type="title" style={styles.emptyTitle}>
-              No products found
-            </ThemedText>
-            <ThemedText style={styles.emptySubtitle}>
-              Check back later for new products.
-            </ThemedText>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#50C878" />
+          <ThemedText style={styles.loadingText}>Loading products...</ThemedText>
+        </View>
+      ) : error ? (
+        <View style={styles.emptyContainer}>
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color="#ccc" />
           </View>
-        }
-      />
+          <ThemedText type="title" style={styles.emptyTitle}>
+            Error loading products
+          </ThemedText>
+          <ThemedText style={styles.emptySubtitle}>
+            {error}
+          </ThemedText>
+        </View>
+      ) : (
+        <FlatList
+          data={products}
+          renderItem={({ item }) => <ProductCard item={item} />}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.row}
+          contentContainerStyle={[
+            styles.list,
+            { paddingBottom: insets.bottom + 20 },
+          ]}
+          showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconContainer}>
+                <Ionicons name="cube-outline" size={64} color="#ccc" />
+              </View>
+              <ThemedText type="title" style={styles.emptyTitle}>
+                No products found
+              </ThemedText>
+              <ThemedText style={styles.emptySubtitle}>
+                Check back later for new products.
+              </ThemedText>
+            </View>
+          }
+        />
+      )}
+
+      {/* Filter Dropdown */}
+      {showDropdown && (
+        <>
+          <Pressable 
+            style={[styles.dropdownOverlay, { top: insets.top + 100 }]}
+            onPress={() => setShowDropdown(false)}
+          />
+          <View style={[styles.dropdownContainer, { paddingTop: insets.top + 100 }]}>
+            <View style={styles.dropdown}>
+            <View style={styles.dropdownHeader}>
+              <ThemedText type="defaultSemiBold" style={styles.dropdownTitle}>
+                Filter by Category
+              </ThemedText>
+              {selectedCategory && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedCategory(null);
+                    setShowDropdown(false);
+                  }}
+                  style={styles.clearButton}
+                  activeOpacity={0.7}
+                >
+                  <ThemedText style={styles.clearButtonText}>Clear</ThemedText>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <ScrollView 
+              style={styles.dropdownContent}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled={true}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.dropdownItem,
+                  !selectedCategory && styles.dropdownItemActive,
+                ]}
+                onPress={() => {
+                  setSelectedCategory(null);
+                  setShowDropdown(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.dropdownItemLeft}>
+                  <View style={[
+                    styles.checkbox,
+                    !selectedCategory && styles.checkboxActive
+                  ]}>
+                    {!selectedCategory && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </View>
+                  <ThemedText
+                    style={[
+                      styles.dropdownItemText,
+                      !selectedCategory && styles.dropdownItemTextActive,
+                    ]}
+                  >
+                    All Categories
+                  </ThemedText>
+                </View>
+                <View style={styles.dropdownBadge}>
+                  <ThemedText style={styles.dropdownBadgeText}>
+                    {allProducts.length}
+                  </ThemedText>
+                </View>
+              </TouchableOpacity>
+
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[
+                    styles.dropdownItem,
+                    selectedCategory === category.id && styles.dropdownItemActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedCategory(category.id);
+                    setShowDropdown(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.dropdownItemLeft}>
+                    <View style={[
+                      styles.checkbox,
+                      selectedCategory === category.id && styles.checkboxActive
+                    ]}>
+                      {selectedCategory === category.id && (
+                        <Ionicons name="checkmark" size={16} color="#fff" />
+                      )}
+                    </View>
+                    <ThemedText
+                      style={[
+                        styles.dropdownItemText,
+                        selectedCategory === category.id &&
+                          styles.dropdownItemTextActive,
+                      ]}
+                    >
+                      {category.categoryName}
+                    </ThemedText>
+                  </View>
+                  <View style={styles.dropdownBadge}>
+                    <ThemedText style={styles.dropdownBadgeText}>
+                      {category.productCount || 0}
+                    </ThemedText>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            </View>
+          </View>
+        </>
+      )}
     </ThemedView>
   );
 }
@@ -214,19 +347,23 @@ const styles = StyleSheet.create({
   },
   headerGradient: {
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingBottom: 32,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    position: 'relative',
+    zIndex: 1002,
     ...Platform.select({
       ios: {
-        shadowColor: '#50C878',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.15,
         shadowRadius: 12,
       },
       android: {
         elevation: 8,
       },
       web: {
-        boxShadow: '0px 4px 12px 0px rgba(80, 200, 120, 0.3)',
+        boxShadow: '0px 4px 12px 0px rgba(0, 0, 0, 0.15)',
       },
     }),
   },
@@ -273,6 +410,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.3)',
+    position: 'relative',
+    zIndex: 1004,
+  },
+  filterButtonActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#50C878',
   },
   list: {
     padding: 20,
@@ -385,6 +545,137 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 40,
     lineHeight: 22,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 100,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  dropdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  dropdownContainer: {
+    position: 'absolute',
+    top: 0,
+    right: 20,
+    zIndex: 1003,
+    alignItems: 'flex-end',
+  },
+  dropdown: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    minWidth: 280,
+    maxWidth: 320,
+    maxHeight: 400,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 12,
+      },
+      web: {
+        boxShadow: '0px 8px 24px 0px rgba(0, 0, 0, 0.15)',
+      },
+    }),
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  dropdownTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  clearButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+  },
+  clearButtonText: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '600',
+  },
+  dropdownContent: {
+    paddingVertical: 8,
+    maxHeight: 320,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 8,
+    marginVertical: 2,
+    borderRadius: 12,
+  },
+  dropdownItemActive: {
+    backgroundColor: '#F0F9F4',
+  },
+  dropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#DDD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  checkboxActive: {
+    backgroundColor: '#50C878',
+    borderColor: '#50C878',
+  },
+  dropdownItemText: {
+    fontSize: 15,
+    color: '#666',
+    fontWeight: '500',
+  },
+  dropdownItemTextActive: {
+    color: '#50C878',
+    fontWeight: '600',
+  },
+  dropdownBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    minWidth: 36,
+    alignItems: 'center',
+  },
+  dropdownBadgeText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
   },
 });
 

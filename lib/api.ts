@@ -44,6 +44,51 @@ export interface AuthResponse {
   };
 }
 
+export interface Product {
+  id: string;
+  shopId: string;
+  categoryId: string;
+  productName: string;
+  SKU?: string;
+  description?: string;
+  price: number;
+  rating?: string;
+  isAvailable: boolean;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  stock: number;
+  itemsSold?: number;
+  shopName: string;
+  shopStatus: string;
+  images: Array<{
+    id: string;
+    product_id: string;
+    image_url: string[];
+    is_primary: boolean;
+  }>;
+}
+
+export interface Category {
+  id: string;
+  categoryName: string;
+  productCount?: number;
+}
+
+export interface Shop {
+  id: string;
+  seller_id: string;
+  shop_name: string;
+  shop_rating?: string;
+  description?: string;
+  image?: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  owner_name: string;
+  products: number;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -136,6 +181,42 @@ class ApiClient {
     } catch (error) {
       console.error('Error clearing token:', error);
     }
+  }
+
+  // Products API
+  async getProducts(categoryId?: string): Promise<Product[]> {
+    const query = categoryId ? `?categoryId=${categoryId}` : '';
+    return this.request<Product[]>(`/products${query}`);
+  }
+
+  async getProduct(productId: string): Promise<Product> {
+    return this.request<Product>(`/products?id=${productId}`);
+  }
+
+  // Categories API
+  async getCategories(withCounts: boolean = false): Promise<Category[]> {
+    const query = withCounts ? '?withCounts=true' : '';
+    return this.request<Category[]>(`/categories${query}`);
+  }
+
+  // Shops API
+  async getShops(status?: string): Promise<Shop[]> {
+    const query = status ? `?status=${status}` : '';
+    return this.request<Shop[]>(`/shops${query}`);
+  }
+
+  async getShop(shopId: string): Promise<Shop> {
+    return this.request<Shop>(`/shops?id=${shopId}`);
+  }
+
+  // Orders API
+  async getOrders(): Promise<any[]> {
+    return this.request<any[]>('/orders');
+  }
+
+  // User API
+  async getCurrentUser(): Promise<any> {
+    return this.request<any>('/auth/me');
   }
 }
 

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -14,6 +14,7 @@ import Animated, {
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTabBar } from '@/contexts/tab-bar-context';
+import { api } from '@/lib/api';
 
 const MENU_ITEMS = [
   {
@@ -65,6 +66,44 @@ export default function AccountScreen() {
   const scrollY = useRef(0);
   const [lastScrollY, setLastScrollY] = useState(0);
   const fadeOpacity = useSharedValue(1);
+  const [userName, setUserName] = useState('Buyani Customer');
+  const [userEmail, setUserEmail] = useState('customer@buyani.app');
+  const [userInitials, setUserInitials] = useState('B');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const user = await api.getCurrentUser();
+        if (user) {
+          setUserName(user.name || user.email?.split('@')[0] || 'Buyani Customer');
+          setUserEmail(user.email || 'customer@buyani.app');
+          
+          // Generate initials from name or email
+          const name = user.name || user.email?.split('@')[0] || '';
+          if (name) {
+            const nameParts = name.trim().split(' ');
+            if (nameParts.length >= 2) {
+              setUserInitials(
+                (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+              );
+            } else {
+              setUserInitials(name.substring(0, 1).toUpperCase());
+            }
+          } else {
+            setUserInitials('B');
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        // Keep default values on error
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -147,13 +186,13 @@ export default function AccountScreen() {
           colors={['#50C878', '#40B068', '#35A05A']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[styles.profileHeader, { paddingTop: insets.top + 28 }]}
+          style={[styles.profileHeader, { paddingTop: insets.top + 48 }]}
         >
           <View style={styles.profileContent}>
             <View style={styles.avatarContainer}>
               <View style={styles.avatar}>
                 <ThemedText type="title" style={styles.avatarText}>
-                  B
+                  {userInitials}
                 </ThemedText>
               </View>
               <View style={styles.verifiedBadge}>
@@ -162,9 +201,9 @@ export default function AccountScreen() {
             </View>
             <View style={styles.profileInfo}>
               <ThemedText type="title" style={styles.profileName}>
-                Buyani Customer
+                {userName}
               </ThemedText>
-              <ThemedText style={styles.profileEmail}>customer@buyani.app</ThemedText>
+              <ThemedText style={styles.profileEmail}>{userEmail}</ThemedText>
               <View style={styles.profileStats}>
                 {STATS.map((stat, index) => (
                   <View key={stat.label} style={styles.statItem}>

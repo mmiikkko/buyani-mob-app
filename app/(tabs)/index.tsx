@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   Linking,
@@ -18,113 +19,58 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTabBar } from '@/contexts/tab-bar-context';
+import { api, type Product, type Category, type Shop } from '@/lib/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Mock data - Replace with API calls later
-const CATEGORIES = [
-  { id: 'fruits', label: 'Fruits', itemCount: 1, color: '#50C878' },
-  { id: 'novelty', label: 'Novelty', itemCount: 3, color: '#f5821f' },
-  { id: 'snacks', label: 'Snacks', itemCount: 5, color: '#50C878' },
-  { id: 'handmade', label: 'Handmade', itemCount: 2, color: '#f5821f' },
-];
+// Category colors for display
+const CATEGORY_COLORS = ['#50C878', '#f5821f', '#50C878', '#f5821f', '#50C878', '#f5821f'];
 
-const BEST_SELLERS = [
-  {
-    id: '1',
-    name: 'test67',
-    price: 'P123.00',
-    shopName: 'My Shop Name',
-    image: require('@/assets/images/react-logo.png'),
-  },
-  {
-    id: '2',
-    name: 'test product',
-    price: 'P1.00',
-    shopName: 'Martin Shop',
-    image: null,
-  },
-  {
-    id: '3',
-    name: 'test 8',
-    price: 'P89.00',
-    shopName: 'My Shop Name',
-    image: null,
-  },
-  {
-    id: '4',
-    name: 'test 5',
-    price: 'P123.00',
-    shopName: 'My Shop Name',
-    image: null,
-  },
-];
-
-const FEATURED_VENDORS = [
-  {
-    id: '1',
-    shopName: 'Martin Shop',
-    rating: 4.9,
-    productCount: 1,
-    sellerName: 'Martin Salamat',
-  },
-  {
-    id: '2',
-    shopName: 'My Shop Name',
-    rating: null,
-    productCount: 3,
-    sellerName: 'Azied',
-  },
-  {
-    id: '3',
-    shopName: 'kmart shop',
-    rating: null,
-    productCount: 0,
-    sellerName: 'kmart',
-  },
-];
-
-function CategoryCard({ item }: { item: (typeof CATEGORIES)[number] }) {
+function CategoryCard({ item, color }: { item: Category; color: string }) {
   return (
     <TouchableOpacity
       style={styles.categoryCard}
       activeOpacity={0.7}
       onPress={() => {
         // TODO: Navigate to category page
-        console.log(`Category ${item.label} pressed`);
+        console.log(`Category ${item.categoryName} pressed`);
       }}
     >
       <View style={styles.categoryIconContainer}>
-        <View style={[styles.categoryIcon, { backgroundColor: `${item.color}20` }]}>
-          <Ionicons name="cube-outline" size={28} color={item.color} />
+        <View style={[styles.categoryIcon, { backgroundColor: `${color}20` }]}>
+          <Ionicons name="cube-outline" size={28} color={color} />
         </View>
       </View>
       <ThemedText type="defaultSemiBold" style={styles.categoryLabel}>
-        {item.label}
+        {item.categoryName}
       </ThemedText>
       <View style={styles.categoryInfo}>
-        <View style={[styles.categoryDot, { backgroundColor: item.color }]} />
+        <View style={[styles.categoryDot, { backgroundColor: color }]} />
         <ThemedText style={styles.categoryItemCount}>
-          {item.itemCount} {item.itemCount === 1 ? 'item' : 'items'}
+          {item.productCount || 0} {(item.productCount || 0) === 1 ? 'item' : 'items'}
         </ThemedText>
       </View>
     </TouchableOpacity>
   );
 }
 
-function ProductCard({ item }: { item: (typeof BEST_SELLERS)[number] }) {
+function ProductCard({ item }: { item: Product }) {
+  const imageUrl = item.images && item.images.length > 0 && item.images[0].image_url 
+    ? item.images[0].image_url[0] 
+    : null;
+
   return (
     <TouchableOpacity
       style={styles.productCard}
       activeOpacity={0.8}
       onPress={() => {
         // TODO: Navigate to product detail page
-        console.log(`Product ${item.name} pressed`);
+        console.log(`Product ${item.productName} pressed`);
       }}
     >
       <View style={styles.productImageContainer}>
-        {item.image ? (
-          <Image source={item.image} style={styles.productImage} contentFit="cover" />
+        {imageUrl ? (
+          <Image source={{ uri: imageUrl }} style={styles.productImage} contentFit="cover" />
         ) : (
           <View style={styles.noImagePlaceholder}>
             <Ionicons name="image-outline" size={32} color="#ccc" />
@@ -134,9 +80,9 @@ function ProductCard({ item }: { item: (typeof BEST_SELLERS)[number] }) {
       </View>
       <View style={styles.productInfo}>
         <ThemedText type="defaultSemiBold" style={styles.productName} numberOfLines={2}>
-          {item.name}
+          {item.productName}
         </ThemedText>
-        <ThemedText style={styles.productPrice}>{item.price}</ThemedText>
+        <ThemedText style={styles.productPrice}>P{Number(item.price).toFixed(2)}</ThemedText>
         <ThemedText style={styles.productShopName} numberOfLines={1}>
           {item.shopName}
         </ThemedText>
@@ -145,14 +91,14 @@ function ProductCard({ item }: { item: (typeof BEST_SELLERS)[number] }) {
   );
 }
 
-function VendorCard({ item }: { item: (typeof FEATURED_VENDORS)[number] }) {
+function VendorCard({ item }: { item: Shop }) {
   return (
     <TouchableOpacity
       style={styles.vendorCard}
       activeOpacity={0.8}
       onPress={() => {
         // TODO: Navigate to vendor/shop page
-        console.log(`Vendor ${item.shopName} pressed`);
+        console.log(`Vendor ${item.shop_name} pressed`);
       }}
     >
       <LinearGradient
@@ -161,25 +107,28 @@ function VendorCard({ item }: { item: (typeof FEATURED_VENDORS)[number] }) {
         end={{ x: 0, y: 1 }}
         style={styles.vendorCardHeader}
       >
+        {item.image && (
+          <Image source={{ uri: item.image }} style={styles.vendorImage} contentFit="cover" />
+        )}
         <View style={styles.vendorIcon}>
           <Ionicons name="storefront-outline" size={36} color="#1976D2" />
         </View>
       </LinearGradient>
       <View style={styles.vendorCardBody}>
         <ThemedText type="defaultSemiBold" style={styles.vendorShopName} numberOfLines={1}>
-          {item.shopName}
+          {item.shop_name}
         </ThemedText>
-        {item.rating && (
+        {item.shop_rating && (
           <View style={styles.vendorRating}>
             <Ionicons name="star" size={16} color="#FFC107" />
-            <ThemedText style={styles.vendorRatingText}>{item.rating}</ThemedText>
+            <ThemedText style={styles.vendorRatingText}>{item.shop_rating}</ThemedText>
           </View>
         )}
         <ThemedText style={styles.vendorProductCount}>
-          {item.productCount} {item.productCount === 1 ? 'product' : 'products'}
+          {item.products} {item.products === 1 ? 'product' : 'products'}
         </ThemedText>
         <ThemedText style={styles.vendorSellerName} numberOfLines={1}>
-          by {item.sellerName}
+          by {item.owner_name}
         </ThemedText>
       </View>
     </TouchableOpacity>
@@ -191,6 +140,45 @@ export default function HomeScreen() {
   const { isVisible, setIsVisible } = useTabBar();
   const scrollY = useRef(0);
   const [lastScrollY, setLastScrollY] = useState(0);
+  
+  // State for API data
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch data from API
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch all data in parallel
+        const [categoriesData, productsData, shopsData] = await Promise.all([
+          api.getCategories(true).catch(() => []),
+          api.getProducts().catch(() => []),
+          api.getShops('approved').catch(() => []),
+        ]);
+
+        setCategories(categoriesData);
+        setProducts(productsData);
+        setShops(shopsData);
+      } catch (err: any) {
+        console.error('Error fetching data:', err);
+        setError(err.message || 'Failed to load data');
+        // Set empty arrays on error to prevent crashes
+        setCategories([]);
+        setProducts([]);
+        setShops([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const handleScroll = (event: any) => {
     const currentScrollY = event.nativeEvent.contentOffset.y;
@@ -357,15 +345,26 @@ export default function HomeScreen() {
               <ThemedText style={styles.viewAllLink}>View all →</ThemedText>
             </TouchableOpacity>
           </View>
-          <FlatList
-            data={BEST_SELLERS}
-            renderItem={({ item }) => <ProductCard item={item} />}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.productList}
-            scrollEnabled={true}
-          />
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#50C878" />
+            </View>
+          ) : (
+            <FlatList
+              data={products.slice(0, 10)}
+              renderItem={({ item }) => <ProductCard item={item} />}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.productList}
+              scrollEnabled={true}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <ThemedText style={styles.emptyText}>No products available</ThemedText>
+                </View>
+              }
+            />
+          )}
         </View>
 
         {/* Shop by Category Section */}
@@ -384,15 +383,28 @@ export default function HomeScreen() {
               <ThemedText style={styles.viewAllLink}>View all →</ThemedText>
             </TouchableOpacity>
           </View>
-          <FlatList
-            data={CATEGORIES}
-            renderItem={({ item }) => <CategoryCard item={item} />}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryList}
-            scrollEnabled={true}
-          />
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#50C878" />
+            </View>
+          ) : (
+            <FlatList
+              data={categories}
+              renderItem={({ item, index }) => (
+                <CategoryCard item={item} color={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
+              )}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryList}
+              scrollEnabled={true}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <ThemedText style={styles.emptyText}>No categories available</ThemedText>
+                </View>
+              }
+            />
+          )}
         </View>
 
         {/* Featured Vendors Section */}
@@ -414,15 +426,26 @@ export default function HomeScreen() {
               <ThemedText style={styles.viewAllLink}>View all →</ThemedText>
             </TouchableOpacity>
           </View>
-          <FlatList
-            data={FEATURED_VENDORS}
-            renderItem={({ item }) => <VendorCard item={item} />}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.vendorList}
-            scrollEnabled={true}
-          />
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#50C878" />
+            </View>
+          ) : (
+            <FlatList
+              data={shops.slice(0, 10)}
+              renderItem={({ item }) => <VendorCard item={item} />}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.vendorList}
+              scrollEnabled={true}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <ThemedText style={styles.emptyText}>No vendors available</ThemedText>
+                </View>
+              }
+            />
+          )}
         </View>
       </ScrollView>
     </ThemedView>
@@ -842,5 +865,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 2,
+  },
+  loadingContainer: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyContainer: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#999',
+    fontSize: 14,
+  },
+  vendorImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
   },
 });
