@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { StyleSheet, FlatList, View, Platform, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { ThemedText } from '@/components/themed-text';
@@ -53,6 +53,7 @@ const PRODUCTS = [
 ];
 
 export default function SellerProductsScreen() {
+  const router = useRouter();
   const { isVisible, setIsVisible } = useTabBar();
   const scrollY = useRef(0);
   const [lastScrollY, setLastScrollY] = useState(0);

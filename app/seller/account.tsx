@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -17,6 +17,7 @@ const MENU_ITEMS = [
 ];
 
 export default function SellerAccountScreen() {
+  const router = useRouter();
   const { isVisible, setIsVisible } = useTabBar();
   const scrollY = useRef(0);
   const [lastScrollY, setLastScrollY] = useState(0);

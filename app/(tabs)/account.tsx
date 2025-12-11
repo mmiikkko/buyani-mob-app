@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -61,6 +61,7 @@ const STATS = [
 ];
 
 export default function AccountScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isVisible, setIsVisible } = useTabBar();
   const scrollY = useRef(0);

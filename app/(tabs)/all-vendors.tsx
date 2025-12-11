@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { useTabBar } from '@/contexts/tab-bar-context';
 import { api, type Shop } from '@/lib/api';
 
 export default function AllVendorsScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { setIsVisible } = useTabBar();
   const [shops, setShops] = useState<Shop[]>([]);
