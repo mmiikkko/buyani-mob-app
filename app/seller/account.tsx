@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -17,6 +17,7 @@ const MENU_ITEMS = [
 ];
 
 export default function SellerAccountScreen() {
+  const router = useRouter();
   const { isVisible, setIsVisible } = useTabBar();
   const scrollY = useRef(0);
   const [lastScrollY, setLastScrollY] = useState(0);
@@ -28,6 +29,13 @@ export default function SellerAccountScreen() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
+        const token = await api.getToken();
+        if (!token) {
+          // No token means user is not logged in
+          setLoading(false);
+          return;
+        }
+
         const user = await api.getCurrentUser();
         if (user) {
           setUserName(user.name || user.email?.split('@')[0] || 'Buyani Seller');
@@ -48,8 +56,15 @@ export default function SellerAccountScreen() {
             setUserInitials('BS');
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching user data:', error);
+        // If it's an authentication error, clear the token and redirect to login
+        if (error.message?.includes('Unauthorized') || 
+            error.message?.includes('Invalid token') ||
+            error.message?.includes('No authentication token')) {
+          await api.clearToken();
+          router.replace('/login');
+        }
         // Keep default values on error
       } finally {
         setLoading(false);
@@ -61,11 +76,25 @@ export default function SellerAccountScreen() {
 
   const handleLogout = async () => {
     try {
+      // Clear the authentication token first
       await api.clearToken();
     } catch (error) {
-      console.error('Error clearing token:', error);
+      // Even if clearing token fails, continue with logout
+      console.error('Error clearing token during logout:', error);
     }
-    router.replace('/login');
+
+    try {
+      // Navigate to login screen
+      router.replace('/login');
+    } catch (navError) {
+      // If replace fails, try push instead
+      console.error('Error navigating to login:', navError);
+      try {
+        router.push('/login');
+      } catch (pushError) {
+        console.error('Failed to navigate to login screen:', pushError);
+      }
+    }
   };
 
   const handleScroll = (event: any) => {

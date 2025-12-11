@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, FlatList, View, TouchableOpacity, Platfo
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -11,6 +12,7 @@ import { useTabBar } from '@/contexts/tab-bar-context';
 import { api, type Product, type Category } from '@/lib/api';
 
 function ProductCard({ item }: { item: Product }) {
+  const router = useRouter();
   const imageUrl = item.images && item.images.length > 0 && item.images[0].image_url 
     ? item.images[0].image_url[0] 
     : null;
@@ -20,8 +22,7 @@ function ProductCard({ item }: { item: Product }) {
       style={styles.productCard}
       activeOpacity={0.85}
       onPress={() => {
-        // TODO: Navigate to product detail page
-        console.log(`Product ${item.productName} pressed`);
+        router.push(`/(tabs)/product/${item.id}`);
       }}
     >
       <View style={styles.productImageContainer}>

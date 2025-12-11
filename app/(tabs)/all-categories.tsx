@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { api, type Category } from '@/lib/api';
 const CATEGORY_COLORS = ['#50C878', '#f5821f', '#50C878', '#f5821f', '#50C878', '#f5821f'];
 
 export default function AllCategoriesScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { setIsVisible } = useTabBar();
   const [categories, setCategories] = useState<Category[]>([]);

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -55,6 +55,7 @@ function CategoryCard({ item, color }: { item: Category; color: string }) {
 }
 
 function ProductCard({ item }: { item: Product }) {
+  const router = useRouter();
   const imageUrl = item.images && item.images.length > 0 && item.images[0].image_url 
     ? item.images[0].image_url[0] 
     : null;
@@ -64,8 +65,7 @@ function ProductCard({ item }: { item: Product }) {
       style={styles.productCard}
       activeOpacity={0.8}
       onPress={() => {
-        // TODO: Navigate to product detail page
-        console.log(`Product ${item.productName} pressed`);
+        router.push(`/(tabs)/product/${item.id}`);
       }}
     >
       <View style={styles.productImageContainer}>
@@ -92,13 +92,13 @@ function ProductCard({ item }: { item: Product }) {
 }
 
 function VendorCard({ item }: { item: Shop }) {
+  const router = useRouter();
   return (
     <TouchableOpacity
       style={styles.vendorCard}
       activeOpacity={0.8}
       onPress={() => {
-        // TODO: Navigate to vendor/shop page
-        console.log(`Vendor ${item.shop_name} pressed`);
+        router.push(`/(tabs)/shop/${item.id}`);
       }}
     >
       <LinearGradient
@@ -136,6 +136,7 @@ function VendorCard({ item }: { item: Shop }) {
 }
 
 export default function HomeScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isVisible, setIsVisible } = useTabBar();
   const scrollY = useRef(0);
@@ -461,23 +462,22 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    paddingBottom: 16,
+    borderBottomWidth: 0,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
-        shadowRadius: 4,
+        shadowRadius: 3,
       },
       android: {
         elevation: 2,
       },
       web: {
-        boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.05)',
+        boxShadow: '0px 1px 3px 0px rgba(0, 0, 0, 0.05)',
       },
     }),
   },
@@ -533,10 +533,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   searchPlaceholder: {
     flex: 1,
@@ -545,20 +547,22 @@ const styles = StyleSheet.create({
   },
   banner: {
     backgroundColor: '#50C878',
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 20,
+    marginHorizontal: 0,
   },
   bannerText: {
-    color: '#fff',
-    fontSize: 15,
+    color: '#FFFFFF',
+    fontSize: 14,
     textAlign: 'center',
     fontWeight: '500',
-    lineHeight: 22,
+    lineHeight: 20,
+    letterSpacing: 0.2,
   },
   carouselContainer: {
-    height: 220,
+    height: 200,
     width: '100%',
-    marginVertical: 24,
+    marginVertical: 20,
     borderRadius: 0,
     overflow: 'hidden',
   },
@@ -568,34 +572,34 @@ const styles = StyleSheet.create({
   },
   discoverSection: {
     paddingHorizontal: 20,
-    marginBottom: 32,
+    marginBottom: 36,
   },
   discoverTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    lineHeight: 40,
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 14,
+    lineHeight: 36,
   },
   discoverTitleText: {
-    color: '#000',
-    fontSize: 32,
-    fontWeight: 'bold',
+    color: '#111827',
+    fontSize: 28,
+    fontWeight: '700',
   },
   titleHighlightGreen: {
     color: '#50C878',
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontWeight: '700',
   },
   titleHighlightOrange: {
-    color: '#f5821f',
-    fontSize: 32,
-    fontWeight: 'bold',
+    color: '#F5821F',
+    fontSize: 28,
+    fontWeight: '700',
   },
   discoverDescription: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 24,
-    marginBottom: 24,
+    fontSize: 15,
+    color: '#6B7280',
+    lineHeight: 22,
+    marginBottom: 20,
   },
   discoverButtons: {
     flexDirection: 'row',
@@ -605,33 +609,46 @@ const styles = StyleSheet.create({
   },
   shopButton: {
     backgroundColor: '#50C878',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
     flex: 1,
-    minWidth: 120,
+    minWidth: 140,
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#50C878',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   shopButtonText: {
-    color: '#fff',
-    fontSize: 14,
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '600',
+    letterSpacing: 0.3,
   },
   exploreButton: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
     borderColor: '#50C878',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
     flex: 1,
-    minWidth: 120,
+    minWidth: 140,
     alignItems: 'center',
   },
   exploreButtonText: {
     color: '#50C878',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
+    letterSpacing: 0.3,
   },
   discoverFooter: {
     fontSize: 13,
@@ -640,40 +657,41 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 20,
-    marginBottom: 40,
+    marginBottom: 36,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionHeaderLeft: {
     flex: 1,
     marginRight: 12,
   },
   sectionLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#50C878',
     fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 8,
+    letterSpacing: 1.2,
+    marginBottom: 6,
+    textTransform: 'uppercase',
   },
   sectionTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    lineHeight: 32,
-    color: '#333',
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 6,
+    lineHeight: 30,
+    color: '#111827',
   },
   sectionSubtitle: {
-    fontSize: 15,
-    color: '#666',
-    lineHeight: 22,
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
   },
   viewAllLink: {
     color: '#50C878',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     marginTop: 4,
   },
@@ -682,25 +700,25 @@ const styles = StyleSheet.create({
     paddingRight: 20,
   },
   categoryCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 20,
+    padding: 18,
     width: 140,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#e8e8e8',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 3,
       },
       android: {
         elevation: 2,
       },
       web: {
-        boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0px 1px 3px 0px rgba(0, 0, 0, 0.06)',
       },
     }),
   },
@@ -740,23 +758,23 @@ const styles = StyleSheet.create({
   },
   productCard: {
     width: 180,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#e8e8e8',
+    borderColor: '#E5E7EB',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
-        shadowRadius: 4,
+        shadowRadius: 6,
       },
       android: {
-        elevation: 2,
+        elevation: 3,
       },
       web: {
-        boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0px 2px 6px 0px rgba(0, 0, 0, 0.08)',
       },
     }),
   },
@@ -787,17 +805,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom: 6,
     lineHeight: 20,
-    color: '#000',
+    color: '#111827',
+    fontWeight: '600',
   },
   productPrice: {
     fontSize: 18,
     color: '#50C878',
     fontWeight: '700',
     marginBottom: 4,
+    letterSpacing: 0.2,
   },
   productShopName: {
     fontSize: 12,
-    color: '#000',
+    color: '#6B7280',
+    fontWeight: '500',
   },
   vendorList: {
     gap: 16,
@@ -805,23 +826,23 @@ const styles = StyleSheet.create({
   },
   vendorCard: {
     width: 200,
-    backgroundColor: '#fff',
-    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#e8e8e8',
+    borderColor: '#E5E7EB',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
-        shadowRadius: 4,
+        shadowRadius: 6,
       },
       android: {
-        elevation: 2,
+        elevation: 3,
       },
       web: {
-        boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0px 2px 6px 0px rgba(0, 0, 0, 0.08)',
       },
     }),
   },

@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -61,6 +61,7 @@ const STATS = [
 ];
 
 export default function AccountScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isVisible, setIsVisible } = useTabBar();
   const scrollY = useRef(0);
@@ -74,6 +75,13 @@ export default function AccountScreen() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
+        const token = await api.getToken();
+        if (!token) {
+          // No token means user is not logged in
+          setLoading(false);
+          return;
+        }
+
         const user = await api.getCurrentUser();
         if (user) {
           setUserName(user.name || user.email?.split('@')[0] || 'Buyani Customer');
@@ -94,8 +102,15 @@ export default function AccountScreen() {
             setUserInitials('B');
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching user data:', error);
+        // If it's an authentication error, clear the token and redirect to login
+        if (error.message?.includes('Unauthorized') || 
+            error.message?.includes('Invalid token') ||
+            error.message?.includes('No authentication token')) {
+          await api.clearToken();
+          router.replace('/login');
+        }
         // Keep default values on error
       } finally {
         setLoading(false);
@@ -107,32 +122,44 @@ export default function AccountScreen() {
 
   const handleLogout = async () => {
     try {
+      // Clear the authentication token first (synchronous operation)
+      await api.clearToken();
+    } catch (error) {
+      // Even if clearing token fails, continue with logout
+      console.error('Error clearing token during logout:', error);
+    }
+
+    try {
       // Smooth fade-out transition before navigation
       fadeOpacity.value = withTiming(0, {
-        duration: 300,
+        duration: 200,
         easing: Easing.in(Easing.ease),
       });
 
-      // Clear the authentication token
-      const { api } = await import('@/lib/api');
-      await api.clearToken();
-
-      // Navigate to login screen after animation
+      // Navigate to login screen after a short delay
+      // Use a shorter timeout to reduce chance of bundle loading issues
       setTimeout(() => {
-        router.replace('/login');
-      }, 300);
+        try {
+          router.replace('/login');
+        } catch (navError) {
+          // If navigation fails, try push instead
+          console.error('Error navigating to login:', navError);
+          try {
+            router.push('/login');
+          } catch (pushError) {
+            // Last resort: just reload the app or show error
+            console.error('Failed to navigate to login screen:', pushError);
+          }
+        }
+      }, 200);
     } catch (error) {
-      console.error('Error during logout:', error);
-      
-      // Smooth fade-out even on error
-      fadeOpacity.value = withTiming(0, {
-        duration: 300,
-        easing: Easing.in(Easing.ease),
-      });
-
-      setTimeout(() => {
+      console.error('Error during logout animation:', error);
+      // Try to navigate immediately without animation
+      try {
         router.replace('/login');
-      }, 300);
+      } catch (navError) {
+        console.error('Failed to navigate to login:', navError);
+      }
     }
   };
 

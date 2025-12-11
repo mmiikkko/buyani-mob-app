@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Link, router, useLocalSearchParams, type Href } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -23,6 +23,7 @@ import { ThemedView } from '@/components/themed-view';
 import { api } from '@/lib/api';
 
 export default function LoginScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams<{ role?: 'customer' | 'seller' }>();
   const initialRole = useMemo(
     () => (params.role === 'seller' ? 'seller' : 'customer'),

@@ -105,6 +105,11 @@ class ApiClient {
 
     if (__DEV__) {
       console.log(`📡 API Request: ${options.method || 'GET'} ${url}`);
+      if (token) {
+        console.log(`🔑 Token present: ${token.substring(0, 20)}...`);
+      } else {
+        console.log(`⚠️ No token`);
+      }
     }
 
     try {
@@ -117,12 +122,40 @@ class ApiClient {
         },
       });
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(error.error || `HTTP error! status: ${response.status}`);
+      if (__DEV__) {
+        console.log(`📥 Response status: ${response.status} ${response.statusText}`);
       }
 
-      return response.json();
+      if (!response.ok) {
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+          if (__DEV__) {
+            console.error(`❌ API Error:`, errorData);
+          }
+        } catch {
+          // If response is not JSON, try to get text
+          try {
+            const text = await response.text();
+            if (text) {
+              errorMessage = text.substring(0, 200);
+              if (__DEV__) {
+                console.error(`❌ Non-JSON error response:`, text.substring(0, 200));
+              }
+            }
+          } catch {
+            // Keep default error message
+          }
+        }
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      if (__DEV__) {
+        console.log(`✅ API Success:`, Array.isArray(data) ? `${data.length} items` : 'Success');
+      }
+      return data;
     } catch (error: any) {
       // Handle network errors
       if (error.message === 'Network request failed' || error.message === 'Failed to fetch') {
@@ -145,14 +178,14 @@ class ApiClient {
   }
 
   async login(data: LoginRequest): Promise<AuthResponse> {
-    return this.request<AuthResponse>('/auth/login', {
+    return this.request<AuthResponse>('/auth/mobile-login', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async signup(data: SignupRequest): Promise<AuthResponse> {
-    return this.request<AuthResponse>('/auth/register', {
+    return this.request<AuthResponse>('/auth/mobile-register', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -190,7 +223,13 @@ class ApiClient {
   }
 
   async getProduct(productId: string): Promise<Product> {
-    return this.request<Product>(`/products?id=${productId}`);
+    // Get all products and find the one with matching ID
+    const products = await this.request<Product[]>(`/products`);
+    const product = products.find(p => p.id === productId);
+    if (!product) {
+      throw new Error('Product not found');
+    }
+    return product;
   }
 
   // Categories API
@@ -216,7 +255,11 @@ class ApiClient {
 
   // User API
   async getCurrentUser(): Promise<any> {
-    return this.request<any>('/auth/me');
+    const token = await this.getToken();
+    if (!token) {
+      throw new Error('No authentication token. Please log in.');
+    }
+    return this.request<any>('/auth/mobile-me');
   }
 }
 

@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import Animated, {
@@ -13,6 +13,7 @@ import Animated, {
 import { ThemedText } from '@/components/themed-text';
 
 export default function SplashScreen() {
+  const router = useRouter();
   const opacity = useSharedValue(0);
   const containerOpacity = useSharedValue(1);
 
@@ -21,22 +22,29 @@ export default function SplashScreen() {
     opacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.ease) });
 
     // After showing for a bit, fade out smoothly before navigation
+    let navigationTimeout: NodeJS.Timeout;
     const fadeOutTimeout = setTimeout(() => {
       containerOpacity.value = withTiming(
         0,
         {
           duration: 500,
           easing: Easing.inOut(Easing.ease),
-        },
-        () => {
-          // Navigate after fade out completes
-          router.replace('/login');
         }
       );
+      
+      // Navigate after fade out completes (outside of Reanimated callback)
+      navigationTimeout = setTimeout(() => {
+        router.replace('/login');
+      }, 500);
     }, 1800);
 
-    return () => clearTimeout(fadeOutTimeout);
-  }, []);
+    return () => {
+      clearTimeout(fadeOutTimeout);
+      if (navigationTimeout) {
+        clearTimeout(navigationTimeout);
+      }
+    };
+  }, [router]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

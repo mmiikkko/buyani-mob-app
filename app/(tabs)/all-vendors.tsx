@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,18 +12,16 @@ import { useTabBar } from '@/contexts/tab-bar-context';
 import { api, type Shop } from '@/lib/api';
 
 export default function AllVendorsScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { setIsVisible } = useTabBar();
   const [shops, setShops] = useState<Shop[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Hide tab bar when component mounts
+  // Keep tab bar visible for this screen
   useEffect(() => {
-    setIsVisible(false);
-    return () => {
-      setIsVisible(true);
-    };
+    setIsVisible(true);
   }, [setIsVisible]);
 
   useEffect(() => {
@@ -47,17 +45,11 @@ export default function AllVendorsScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      {/* Back Button */}
+      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.push('/(tabs)')}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
+        <View style={styles.placeholder} />
         <ThemedText type="title" style={styles.headerTitle}>
-          All Vendors
+          All Shops
         </ThemedText>
         <View style={styles.placeholder} />
       </View>
@@ -106,8 +98,7 @@ export default function AllVendorsScreen() {
                 style={styles.vendorCard}
                 activeOpacity={0.8}
                 onPress={() => {
-                  // TODO: Navigate to shop page
-                  console.log(`Shop ${shop.shop_name} pressed`);
+                  router.push(`/(tabs)/shop/${shop.id}`);
                 }}
               >
                 <LinearGradient
