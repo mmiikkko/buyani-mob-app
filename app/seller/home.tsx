@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,63 +7,41 @@ import { useRouter } from 'expo-router';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { useTabBar } from '@/contexts/tab-bar-context';
-
-const METRICS = [
-  { 
-    id: 'sales', 
-    label: "Today's Sales", 
-    value: '₱4,520',
-    icon: 'cash-outline',
-    color: '#2E7D32',
-    bgColor: '#E8F5E9',
-    trend: '+12%'
-  },
-  { 
-    id: 'orders', 
-    label: 'Pending Orders', 
-    value: '12',
-    icon: 'receipt-outline',
-    color: '#F5821F',
-    bgColor: '#FFF3E0',
-    trend: '3 new'
-  },
-  { 
-    id: 'inventory', 
-    label: 'Low Stock Items', 
-    value: '4',
-    icon: 'alert-circle-outline',
-    color: '#D32F2F',
-    bgColor: '#FFEBEE',
-    trend: 'Action needed'
-  },
-];
-
-const ORDERS = [
-  { 
-    id: 'SO-1045', 
-    item: 'Fresh Kale Bundle', 
-    amount: '₱220', 
-    status: 'Ready to ship',
-    statusColor: '#2E7D32',
-    customer: 'Maria Santos',
-    time: '2 hours ago'
-  },
-  { 
-    id: 'SO-1046', 
-    item: 'Dried Pineapple Pack', 
-    amount: '₱95', 
-    status: 'Awaiting pickup',
-    statusColor: '#F5821F',
-    customer: 'Juan Dela Cruz',
-    time: '5 hours ago'
-  },
-];
+import { api, SellerOrder, SellerStats } from '@/lib/api';
 
 export default function SellerHomeScreen() {
   const router = useRouter();
   const { isVisible, setIsVisible } = useTabBar();
   const scrollY = useRef(0);
   const [lastScrollY, setLastScrollY] = useState(0);
+  const [stats, setStats] = useState<SellerStats | null>(null);
+  const [recentOrders, setRecentOrders] = useState<SellerOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [statsData, orders] = await Promise.all([
+          api.getSellerStats('all'),
+          api.getSellerOrders(),
+        ]);
+
+        setStats(statsData);
+        setRecentOrders(orders.slice(0, 5));
+      } catch (err: any) {
+        console.error('Error loading seller dashboard:', err);
+        setError(err?.message || 'Failed to load dashboard');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
 
   const handleScroll = (event: any) => {
     const currentScrollY = event.nativeEvent.contentOffset.y;
@@ -93,6 +71,41 @@ export default function SellerHomeScreen() {
     setLastScrollY(currentScrollY);
     scrollY.current = currentScrollY;
   };
+
+  const metricCards = stats
+    ? [
+        {
+          id: 'sales',
+          label: "Total Sales",
+          value: `₱${Number(stats.totalSales || 0).toLocaleString('en-PH', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+          icon: 'cash-outline' as const,
+          color: '#2E7D32',
+          bgColor: '#E8F5E9',
+          trend: `${stats.totalOrders} orders`,
+        },
+        {
+          id: 'orders',
+          label: 'Pending Orders',
+          value: String(stats.pendingOrders || 0),
+          icon: 'receipt-outline' as const,
+          color: '#F5821F',
+          bgColor: '#FFF3E0',
+          trend: 'Awaiting action',
+        },
+        {
+          id: 'inventory',
+          label: 'Active Products',
+          value: String(stats.activeProducts || 0),
+          icon: 'alert-circle-outline' as const,
+          color: '#1565C0',
+          bgColor: '#E3F2FD',
+          trend: `${stats.removedProducts || 0} removed`,
+        },
+      ]
+    : [];
 
   return (
     <ThemedView style={styles.wrapper}>
@@ -131,10 +144,22 @@ export default function SellerHomeScreen() {
 
         {/* Metrics Cards */}
         <View style={styles.metricRow}>
-          {METRICS.map((metric) => (
+          {loading && !stats ? (
+            <>
+              <View style={[styles.metricCard, { borderLeftColor: '#E0E0E0' }]}>
+                <View style={[styles.metricIconContainer, { backgroundColor: '#F5F5F5' }]} />
+                <View style={styles.metricContent}>
+                  <ThemedText style={styles.metricLabel}>Loading...</ThemedText>
+                  <ThemedText type="title" style={[styles.metricValue, { color: '#9E9E9E' }]}>
+                    —
+                  </ThemedText>
+                </View>
+              </View>
+            </>
+          ) : metricCards.map((metric) => (
             <View key={metric.id} style={[styles.metricCard, { borderLeftColor: metric.color }]}>
               <View style={[styles.metricIconContainer, { backgroundColor: metric.bgColor }]}>
-                <Ionicons name={metric.icon as any} size={24} color={metric.color} />
+                <Ionicons name={metric.icon} size={24} color={metric.color} />
               </View>
               <View style={styles.metricContent}>
                 <ThemedText style={styles.metricLabel} numberOfLines={2}>
@@ -151,53 +176,86 @@ export default function SellerHomeScreen() {
           ))}
         </View>
 
+        {error && (
+          <View style={styles.errorContainer}>
+            <ThemedText style={styles.errorText}>
+              {error}
+            </ThemedText>
+          </View>
+        )}
+
         {/* Recent Orders Section */}
         <View style={styles.sectionHeader}>
           <View>
             <ThemedText type="subtitle" style={styles.sectionTitle}>Recent Orders</ThemedText>
             <ThemedText style={styles.sectionSubtitle}>Manage your pending orders</ThemedText>
           </View>
-          <TouchableOpacity style={styles.seeAllButton}>
+          <TouchableOpacity 
+            style={styles.seeAllButton}
+            activeOpacity={0.7}
+            onPress={() => router.push('/seller/orders')}
+          >
             <ThemedText style={styles.linkText}>See all</ThemedText>
             <Ionicons name="chevron-forward" size={16} color="#000000" />
           </TouchableOpacity>
         </View>
 
         <View style={styles.card}>
-          {ORDERS.map((order, index) => (
-            <TouchableOpacity 
-              key={order.id} 
-              style={[
-                styles.orderRow,
-                index !== ORDERS.length - 1 && styles.orderRowBorder
-              ]}
-              activeOpacity={0.7}
-            >
-              <View style={styles.orderContent}>
-                <View style={styles.orderHeader}>
-                  <View style={styles.orderInfo}>
-                    <ThemedText type="defaultSemiBold" style={styles.orderItem}>
-                      {order.item}
+          {loading && recentOrders.length === 0 ? (
+            <ThemedText style={styles.sectionSubtitle}>Loading recent orders...</ThemedText>
+          ) : recentOrders.length === 0 ? (
+            <ThemedText style={styles.sectionSubtitle}>No recent orders yet.</ThemedText>
+          ) : recentOrders.map((order, index) => {
+            const amount = order.total ?? 0;
+            const amountText = `₱${Number(amount).toLocaleString('en-PH', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`;
+            const statusColor =
+              order.status === 'accepted' || order.status === 'completed'
+                ? '#2E7D32'
+                : order.status === 'pending'
+                ? '#F5821F'
+                : '#1565C0';
+
+            return (
+              <TouchableOpacity 
+                key={order.id} 
+                style={[
+                  styles.orderRow,
+                  index !== recentOrders.length - 1 && styles.orderRowBorder
+                ]}
+                activeOpacity={0.7}
+                onPress={() => router.push('/seller/orders')}
+              >
+                <View style={styles.orderContent}>
+                  <View style={styles.orderHeader}>
+                    <View style={styles.orderInfo}>
+                      <ThemedText type="defaultSemiBold" style={styles.orderItem}>
+                        {order.items?.[0]?.product?.productName || 'Order'}
+                      </ThemedText>
+                      <ThemedText style={styles.orderId}>{order.id}</ThemedText>
+                    </View>
+                    <ThemedText type="defaultSemiBold" style={styles.orderAmount}>
+                      {amountText}
                     </ThemedText>
-                    <ThemedText style={styles.orderId}>{order.id}</ThemedText>
                   </View>
-                  <ThemedText type="defaultSemiBold" style={styles.orderAmount}>
-                    {order.amount}
-                  </ThemedText>
-                </View>
-                <View style={styles.orderFooter}>
-                  <View style={[styles.statusBadge, { backgroundColor: `${order.statusColor}15` }]}>
-                    <View style={[styles.statusDot, { backgroundColor: order.statusColor }]} />
-                    <ThemedText style={[styles.orderStatus, { color: order.statusColor }]}>
-                      {order.status}
+                  <View style={styles.orderFooter}>
+                    <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
+                      <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                      <ThemedText style={[styles.orderStatus, { color: statusColor }]}>
+                        {order.status}
+                      </ThemedText>
+                    </View>
+                    <ThemedText style={styles.orderTime}>
+                      {new Date(order.createdAt).toLocaleString()}
                     </ThemedText>
                   </View>
-                  <ThemedText style={styles.orderTime}>{order.time}</ThemedText>
                 </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#000000" />
-            </TouchableOpacity>
-          ))}
+                <Ionicons name="chevron-forward" size={20} color="#000000" />
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* Action Buttons */}
@@ -213,7 +271,11 @@ export default function SellerHomeScreen() {
             </ThemedText>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.ctaButton} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.ctaButton}
+            activeOpacity={0.8}
+            onPress={() => router.push('/seller/POS')}
+          >
             <LinearGradient
               colors={['#2E7D32', '#4CAF50']}
               start={{ x: 0, y: 0 }}
@@ -345,6 +407,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
     textAlign: 'center',
+  },
+  errorContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#D32F2F',
   },
   sectionHeader: {
     flexDirection: 'row',

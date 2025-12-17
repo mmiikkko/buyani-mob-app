@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { StyleSheet, FlatList, View, Platform, TouchableOpacity, Image, ScrollView } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { StyleSheet, FlatList, View, Platform, TouchableOpacity, Image, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,50 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTabBar } from '@/contexts/tab-bar-context';
-
-// Mock product data - replace with actual API call
-const PRODUCTS = [
-  {
-    id: '1',
-    name: 'Fresh Kale Bundle',
-    price: '₱220',
-    stock: 45,
-    status: 'active',
-    image: 'https://via.placeholder.com/150',
-    category: 'Vegetables',
-    sales: 120,
-  },
-  {
-    id: '2',
-    name: 'Dried Pineapple Pack',
-    price: '₱95',
-    stock: 5,
-    status: 'active',
-    image: 'https://via.placeholder.com/150',
-    category: 'Fruits',
-    sales: 89,
-  },
-  {
-    id: '3',
-    name: 'Organic Tomatoes',
-    price: '₱150',
-    stock: 0,
-    status: 'out_of_stock',
-    image: 'https://via.placeholder.com/150',
-    category: 'Vegetables',
-    sales: 67,
-  },
-  {
-    id: '4',
-    name: 'Fresh Carrots',
-    price: '₱180',
-    stock: 23,
-    status: 'active',
-    image: 'https://via.placeholder.com/150',
-    category: 'Vegetables',
-    sales: 45,
-  },
-];
+import { api, SellerProduct } from '@/lib/api';
 
 export default function SellerProductsScreen() {
   const router = useRouter();
@@ -58,6 +15,27 @@ export default function SellerProductsScreen() {
   const scrollY = useRef(0);
   const [lastScrollY, setLastScrollY] = useState(0);
   const [filter, setFilter] = useState<'all' | 'active' | 'out_of_stock' | 'low_stock'>('all');
+  const [products, setProducts] = useState<SellerProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await api.getSellerProducts();
+        setProducts(data);
+      } catch (err: any) {
+        console.error('Error fetching seller products:', err);
+        setError(err?.message || 'Failed to load products');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
 
   const handleScroll = (event: any) => {
     const currentScrollY = event.nativeEvent.contentOffset.y;
@@ -86,34 +64,90 @@ export default function SellerProductsScreen() {
     scrollY.current = currentScrollY;
   };
 
-  const filteredProducts = PRODUCTS.filter((product) => {
+  const filteredProducts = products.filter((product) => {
+    const stock = product.stock ?? 0;
+    const status = (product.status || '').toLowerCase();
+
+    const isOutOfStock = stock <= 0;
+    const isActive = !isOutOfStock && (status === 'active' || status === '');
+    const isLowStock = stock > 0 && stock < 10;
+
     if (filter === 'all') return true;
-    if (filter === 'active') return product.status === 'active' && product.stock > 0;
-    if (filter === 'out_of_stock') return product.status === 'out_of_stock' || product.stock === 0;
-    if (filter === 'low_stock') return product.stock > 0 && product.stock < 10;
+    if (filter === 'active') return isActive;
+    if (filter === 'out_of_stock') return isOutOfStock;
+    if (filter === 'low_stock') return isLowStock;
     return true;
   });
 
-  const renderProduct = ({ item }: { item: typeof PRODUCTS[0] }) => (
+  const handleDeleteProduct = (productId: string) => {
+    Alert.alert(
+      'Remove product',
+      'Are you sure you want to remove this product? You can always restock it later from the web seller center.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.deleteProduct(productId);
+              setProducts((prev) => prev.filter((p) => p.id !== productId));
+            } catch (err: any) {
+              console.error('Error deleting product:', err);
+              Alert.alert('Error', err?.message || 'Failed to remove product');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const getPrimaryImage = (item: SellerProduct): string | null => {
+    if (!item.images || item.images.length === 0) return null;
+    const primary = item.images.find((img) => img.is_primary) || item.images[0];
+    if (!primary?.image_url) return null;
+    if (Array.isArray(primary.image_url)) {
+      return primary.image_url[0] ?? null;
+    }
+    return primary.image_url;
+  };
+
+  const renderProduct = ({ item }: { item: SellerProduct }) => {
+    const stock = item.stock ?? 0;
+    const status = (item.status || '').toLowerCase();
+    const isOutOfStock = stock <= 0;
+    const isLowStock = stock > 0 && stock < 10;
+    const statusKey = isOutOfStock ? 'out_of_stock' : 'active';
+    const imageUrl = getPrimaryImage(item);
+
+    return (
     <TouchableOpacity style={styles.productCard} activeOpacity={0.7}>
       <View style={styles.productImageContainer}>
-        <Image source={{ uri: item.image }} style={styles.productImage} />
-        <View style={[styles.statusBadge, styles[`statusBadge${item.status}`]]}>
+        {imageUrl ? (
+          <Image source={{ uri: imageUrl }} style={styles.productImage} />
+        ) : (
+          <View style={[styles.productImage, styles.productImagePlaceholder]}>
+            <ThemedText style={styles.productImagePlaceholderText}>No Image</ThemedText>
+          </View>
+        )}
+        <View style={[styles.statusBadge, styles[`statusBadge${statusKey}`]]}>
           <ThemedText style={styles.statusText}>
-            {item.status === 'out_of_stock' || item.stock === 0 ? 'Out of Stock' : 'Active'}
+            {isOutOfStock ? 'Out of Stock' : 'Active'}
           </ThemedText>
         </View>
       </View>
       <View style={styles.productInfo}>
         <ThemedText type="defaultSemiBold" style={styles.productName} numberOfLines={2}>
-          {item.name}
+          {item.productName}
         </ThemedText>
-        <ThemedText style={styles.productCategory}>{item.category}</ThemedText>
+        <ThemedText style={styles.productCategory}>
+          {item.SKU || 'No SKU'}
+        </ThemedText>
         <View style={styles.productDetails}>
           <View style={styles.detailRow}>
             <ThemedText style={styles.detailLabel}>Price:</ThemedText>
             <ThemedText type="defaultSemiBold" style={styles.productPrice}>
-              {item.price}
+              ₱{Number(item.price).toFixed(2)}
             </ThemedText>
           </View>
           <View style={styles.detailRow}>
@@ -121,30 +155,43 @@ export default function SellerProductsScreen() {
             <ThemedText
               style={[
                 styles.stockText,
-                item.stock === 0 && styles.stockTextEmpty,
-                item.stock > 0 && item.stock < 10 && styles.stockTextLow,
+                isOutOfStock && styles.stockTextEmpty,
+                isLowStock && styles.stockTextLow,
               ]}
             >
-              {item.stock} units
+              {stock} units
             </ThemedText>
           </View>
           <View style={styles.detailRow}>
             <ThemedText style={styles.detailLabel}>Sales:</ThemedText>
-            <ThemedText style={styles.salesText}>{item.sales} sold</ThemedText>
+            <ThemedText style={styles.salesText}>{item.itemsSold ?? 0} sold</ThemedText>
           </View>
         </View>
         <View style={styles.productActions}>
-          <TouchableOpacity style={styles.editButton} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.editButton}
+            activeOpacity={0.7}
+            onPress={() => {
+              Alert.alert(
+                'Edit product',
+                'Editing products is currently available on the web seller center. Mobile editing will be added soon.'
+              );
+            }}
+          >
             <Ionicons name="create-outline" size={18} color="#2E7D32" />
             <ThemedText style={styles.editButtonText}>Edit</ThemedText>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.deleteButton} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.deleteButton}
+            activeOpacity={0.7}
+            onPress={() => handleDeleteProduct(item.id)}
+          >
             <Ionicons name="trash-outline" size={18} color="#D32F2F" />
           </TouchableOpacity>
         </View>
       </View>
     </TouchableOpacity>
-  );
+  );};
 
   return (
     <ThemedView style={styles.container}>
@@ -206,6 +253,12 @@ export default function SellerProductsScreen() {
       </View>
 
       {/* Products List */}
+      {error && (
+        <View style={styles.errorContainer}>
+          <ThemedText style={styles.errorText}>{error}</ThemedText>
+        </View>
+      )}
+
       <FlatList
         data={filteredProducts}
         keyExtractor={(item) => item.id}
@@ -216,11 +269,17 @@ export default function SellerProductsScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="cube-outline" size={64} color="#ccc" />
-            <ThemedText style={styles.emptyText}>No products found</ThemedText>
-            <ThemedText style={styles.emptySubtext}>
-              Start by adding your first product
-            </ThemedText>
+            {loading ? (
+              <ThemedText style={styles.emptyText}>Loading products...</ThemedText>
+            ) : (
+              <>
+                <Ionicons name="cube-outline" size={64} color="#ccc" />
+                <ThemedText style={styles.emptyText}>No products found</ThemedText>
+                <ThemedText style={styles.emptySubtext}>
+                  Add products from the web seller center to see them here.
+                </ThemedText>
+              </>
+            )}
           </View>
         }
       />

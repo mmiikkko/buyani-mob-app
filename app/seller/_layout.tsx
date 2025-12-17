@@ -1,13 +1,13 @@
-import { Tabs } from 'expo-router';
-import React, { useEffect } from 'react';
-import { LayoutAnimation, Platform, UIManager } from 'react-native';
+import { Tabs, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, LayoutAnimation, Platform, UIManager, View } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { TabBarProvider, useTabBar } from '@/contexts/tab-bar-context';
+import { api } from '@/lib/api';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -132,10 +132,73 @@ function SellerTabLayoutContent() {
   );
 }
 
+function SellerAuthGate({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const token = await api.getToken();
+
+        // No token -> force login as seller
+        if (!token || token === 'demo-token-offline-mode') {
+          setCheckingAuth(false);
+          router.replace('/login?role=seller' as any);
+          return;
+        }
+
+        try {
+          const user = await api.getCurrentUser();
+
+          // Only users with an approved shop (or explicit SELLER role)
+          // are allowed into the seller area. Everyone else goes to
+          // the customer home UI.
+          const shopStatus = user?.shop?.status;
+          const isSeller =
+            (typeof user.role === 'string' && user.role.toLowerCase() === 'seller') ||
+            shopStatus === 'approved';
+
+          if (!isSeller) {
+            router.replace('/(tabs)' as any);
+            return;
+          }
+
+          setCheckingAuth(false);
+        } catch (error: any) {
+          // Invalid or expired token - clear and go to seller login
+          console.log('Seller auth token invalid, redirecting to login:', error?.message);
+          await api.clearToken();
+          setCheckingAuth(false);
+          router.replace('/login?role=seller' as any);
+        }
+      } catch (error) {
+        console.error('Error checking seller auth:', error);
+        setCheckingAuth(false);
+        router.replace('/login?role=seller' as any);
+      }
+    };
+
+    checkAuth();
+  }, [router]);
+
+  if (checkingAuth) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#2E7D32" />
+      </View>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 export default function SellerTabLayout() {
   return (
     <TabBarProvider>
-      <SellerTabLayoutContent />
+      <SellerAuthGate>
+        <SellerTabLayoutContent />
+      </SellerAuthGate>
     </TabBarProvider>
   );
 }

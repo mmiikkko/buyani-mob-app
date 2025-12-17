@@ -25,45 +25,46 @@ function TabLayoutContent() {
   }, [isVisible]);
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: '#50C878',
-        tabBarInactiveTintColor: '#9CA3AF',
-        headerShown: false,
-        tabBarShowLabel: false,
-        tabBarStyle: {
-            backgroundColor: '#FFFFFF',
-            height: Platform.OS === 'ios' ? 80 : 68,
-            paddingBottom: Platform.OS === 'ios' ? 22 : 12,
-            paddingTop: 10,
-            marginBottom: 18,
-            marginHorizontal: 18,
-            borderRadius: 26,
-            borderTopWidth: 0,
-            position: 'absolute',
-            opacity: isVisible ? 1 : 0,
-            transform: [{ translateY: isVisible ? 0 : 100 }],
-            ...Platform.select({
-              ios: {
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 6 },
-                shadowOpacity: 0.12,
-                shadowRadius: 18,
-              },
-              android: {
-                elevation: 10,
-              },
-              web: {
-                boxShadow: '0px 10px 30px rgba(15, 23, 42, 0.25)',
-              },
-            }),
-            // @ts-ignore - pointerEvents should be in style for web compatibility
-            pointerEvents: isVisible ? 'auto' : 'none',
+    <>
+      <Tabs
+        screenOptions={{
+          tabBarActiveTintColor: '#50C878',
+          tabBarInactiveTintColor: '#9CA3AF',
+          headerShown: false,
+          tabBarShowLabel: false,
+          tabBarStyle: {
+              backgroundColor: '#FFFFFF',
+              height: Platform.OS === 'ios' ? 80 : 68,
+              paddingBottom: Platform.OS === 'ios' ? 22 : 12,
+              paddingTop: 10,
+              marginBottom: 18,
+              marginHorizontal: 18,
+              borderRadius: 26,
+              borderTopWidth: 0,
+              position: 'absolute',
+              opacity: isVisible ? 1 : 0,
+              transform: [{ translateY: isVisible ? 0 : 100 }],
+              ...Platform.select({
+                ios: {
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.12,
+                  shadowRadius: 18,
+                },
+                android: {
+                  elevation: 10,
+                },
+                web: {
+                  boxShadow: '0px 10px 30px rgba(15, 23, 42, 0.25)',
+                },
+              }),
+              // @ts-ignore - pointerEvents should be in style for web compatibility
+              pointerEvents: isVisible ? 'auto' : 'none',
+            },
+          tabBarIconStyle: {
+            marginTop: 0,
           },
-        tabBarIconStyle: {
-          marginTop: 0,
-        },
-      }}>
+        }}>
       <Tabs.Screen
         name="index"
         options={{
@@ -176,7 +177,12 @@ function TabLayoutContent() {
         name="notifications"
         options={hiddenScreenOptions}
       />
-    </Tabs>
+      <Tabs.Screen
+        name="messages"
+        options={hiddenScreenOptions}
+      />
+      </Tabs>
+    </>
   );
 }
 

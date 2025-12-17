@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
+import { api } from '@/lib/api';
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -21,28 +22,75 @@ export default function SplashScreen() {
     // Fade in animation
     opacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.ease) });
 
-    // After showing for a bit, fade out smoothly before navigation
-    let navigationTimeout: NodeJS.Timeout;
-    const fadeOutTimeout = setTimeout(() => {
-      containerOpacity.value = withTiming(
-        0,
-        {
+    // Check if user is already logged in
+    const checkAuthAndNavigate = async () => {
+      try {
+        const token = await api.getToken();
+        
+        // If no token, go to login
+        if (!token || token === 'demo-token-offline-mode') {
+          // Fade out and navigate to login
+          containerOpacity.value = withTiming(0, {
+            duration: 500,
+            easing: Easing.inOut(Easing.ease),
+          });
+          
+          setTimeout(() => {
+            router.replace('/login');
+          }, 500);
+          return;
+        }
+
+        // If token exists, verify it's valid and get user info
+        try {
+          // If token is valid and user can be fetched, always send them to
+          // the customer home tabs first, even if they are a seller.
+          await api.getCurrentUser();
+
+          // Fade out and navigate to customer home
+          containerOpacity.value = withTiming(0, {
+            duration: 500,
+            easing: Easing.inOut(Easing.ease),
+          });
+
+          setTimeout(() => {
+            router.replace('/(tabs)' as any);
+          }, 500);
+        } catch (error: any) {
+          // Token is invalid, clear it and go to login
+          console.log('Token invalid, redirecting to login:', error.message);
+          await api.clearToken();
+          
+          containerOpacity.value = withTiming(0, {
+            duration: 500,
+            easing: Easing.inOut(Easing.ease),
+          });
+          
+          setTimeout(() => {
+            router.replace('/login');
+          }, 500);
+        }
+      } catch (error) {
+        // Error checking auth, go to login
+        console.error('Error checking auth:', error);
+        containerOpacity.value = withTiming(0, {
           duration: 500,
           easing: Easing.inOut(Easing.ease),
-        }
-      );
-      
-      // Navigate after fade out completes (outside of Reanimated callback)
-      navigationTimeout = setTimeout(() => {
-        router.replace('/login');
-      }, 500);
+        });
+        
+        setTimeout(() => {
+          router.replace('/login');
+        }, 500);
+      }
+    };
+
+    // Wait a bit for splash screen, then check auth
+    const fadeOutTimeout = setTimeout(() => {
+      checkAuthAndNavigate();
     }, 1800);
 
     return () => {
       clearTimeout(fadeOutTimeout);
-      if (navigationTimeout) {
-        clearTimeout(navigationTimeout);
-      }
     };
   }, [router]);
 

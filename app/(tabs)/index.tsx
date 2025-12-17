@@ -13,7 +13,7 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -406,7 +406,7 @@ export default function HomeScreen() {
       >
         {/* Header with Logo, Search, Cart, Profile */}
         <View style={[styles.header, { paddingTop: insets.top + 28 }]}>
-          <View style={styles.headerTop}>
+        <View style={styles.headerTop}>
             <View style={styles.logoContainer}>
               <Image
                 source={require('@/assets/images/Buyani.jpeg')}
@@ -438,6 +438,13 @@ export default function HomeScreen() {
                 <Ionicons name="location" size={12} color="#50C878" />
                 <ThemedText style={styles.locationText}>CNSC</ThemedText>
               </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.messagesButton}
+              activeOpacity={0.7}
+              onPress={() => router.push('/(tabs)/messages')}
+            >
+              <Ionicons name="chatbubbles-outline" size={18} color="#10B981" />
+            </TouchableOpacity>
               <TouchableOpacity
                 style={styles.cartButton}
                 activeOpacity={0.7}
@@ -591,7 +598,7 @@ export default function HomeScreen() {
             </View>
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() => router.push('/(tabs)/all-best-sellers')}
+              onPress={() => router.push('/(tabs)/all-products')}
             >
               <ThemedText style={styles.viewAllLink}>View all →</ThemedText>
             </TouchableOpacity>
@@ -716,6 +723,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  messagesButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ECFDF5',
   },
   locationButton: {
     flexDirection: 'row',

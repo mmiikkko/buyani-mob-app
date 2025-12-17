@@ -34,22 +34,71 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(20);
 
+  // Check if user is already logged in
   useEffect(() => {
-    opacity.value = withTiming(1, {
-      duration: 600,
-      easing: Easing.out(Easing.ease),
-    });
-    translateY.value = withTiming(0, {
-      duration: 600,
-      easing: Easing.out(Easing.ease),
-    });
-  }, []);
+    const checkExistingAuth = async () => {
+      try {
+        const token = await api.getToken();
+        
+        // If no token, show login form
+        if (!token || token === 'demo-token-offline-mode') {
+          setCheckingAuth(false);
+          opacity.value = withTiming(1, {
+            duration: 600,
+            easing: Easing.out(Easing.ease),
+          });
+          translateY.value = withTiming(0, {
+            duration: 600,
+            easing: Easing.out(Easing.ease),
+          });
+          return;
+        }
+
+        // If token exists, verify it's valid
+        try {
+          // User is already logged in. Regardless of seller status, always
+          // land on the customer home tabs first; seller UI is accessed
+          // explicitly from the account screen.
+          await api.getCurrentUser();
+          router.replace('/(tabs)' as any);
+        } catch (error: any) {
+          // Token is invalid, clear it and show login form
+          console.log('Token invalid, showing login form:', error.message);
+          await api.clearToken();
+          setCheckingAuth(false);
+          opacity.value = withTiming(1, {
+            duration: 600,
+            easing: Easing.out(Easing.ease),
+          });
+          translateY.value = withTiming(0, {
+            duration: 600,
+            easing: Easing.out(Easing.ease),
+          });
+        }
+      } catch (error) {
+        // Error checking auth, show login form
+        console.error('Error checking auth:', error);
+        setCheckingAuth(false);
+        opacity.value = withTiming(1, {
+          duration: 600,
+          easing: Easing.out(Easing.ease),
+        });
+        translateY.value = withTiming(0, {
+          duration: 600,
+          easing: Easing.out(Easing.ease),
+        });
+      }
+    };
+
+    checkExistingAuth();
+  }, [router]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -87,10 +136,16 @@ export default function LoginScreen() {
       });
 
       // Navigate after animation completes
-      setTimeout(() => {
-        const destination: Href =
-          role === 'seller' ? ('/seller' as Href) : ('/(tabs)' as Href);
-        router.replace(destination);
+      setTimeout(async () => {
+        try {
+          // After login, always send the user to the customer home tabs.
+          // Sellers can then choose to enter the seller dashboard from there.
+          await api.getCurrentUser();
+          router.replace('/(tabs)' as Href);
+        } catch {
+          // If we can't fetch user details, still fall back to customer home.
+          router.replace('/(tabs)' as Href);
+        }
       }, 300);
     } catch (e: any) {
       // Check if it's a network/server connection error
@@ -123,10 +178,14 @@ export default function LoginScreen() {
             easing: Easing.in(Easing.ease),
           });
 
-          setTimeout(() => {
-            const destination: Href =
-              role === 'seller' ? ('/seller' as Href) : ('/(tabs)' as Href);
-            router.replace(destination);
+          setTimeout(async () => {
+            try {
+              await api.getCurrentUser();
+            } catch {
+              // ignore; offline/demo mode
+            }
+            // Even in offline/demo mode, always land on customer home first.
+            router.replace('/(tabs)' as Href);
           }, 300);
         }, 1500);
       } else {
@@ -136,6 +195,18 @@ export default function LoginScreen() {
       }
     }
   };
+
+  // Show loading while checking auth
+  if (checkingAuth) {
+    return (
+      <ThemedView style={styles.wrapper}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#F5821F" />
+          <ThemedText style={styles.loadingText}>Checking authentication...</ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
 
   return (
 <KeyboardAvoidingView
@@ -398,5 +469,15 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     fontSize: 14,
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#6B7280',
   },
 });

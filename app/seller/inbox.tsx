@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, FlatList, View, Platform, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,50 +6,82 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTabBar } from '@/contexts/tab-bar-context';
+import { api } from '@/lib/api';
 
-const MESSAGES = [
-  { 
-    id: '1', 
-    customerName: 'Maria Santos',
-    lastMessage: 'Hi, when will my order be delivered?',
-    time: '2 hours ago',
-    unread: true,
-    avatar: 'MS',
-    orderId: 'SO-1045'
-  },
-  { 
-    id: '2', 
-    customerName: 'Juan Dela Cruz',
-    lastMessage: 'Thank you for the fast delivery!',
-    time: '5 hours ago',
-    unread: false,
-    avatar: 'JD',
-    orderId: 'SO-1046'
-  },
-  { 
-    id: '3', 
-    customerName: 'Anna Garcia',
-    lastMessage: 'Is this product still available?',
-    time: '1 day ago',
-    unread: true,
-    avatar: 'AG',
-    orderId: null
-  },
-  {
-    id: '4',
-    customerName: 'Carlos Reyes',
-    lastMessage: 'Can I change my delivery address?',
-    time: '2 days ago',
-    unread: false,
-    avatar: 'CR',
-    orderId: 'SO-1047'
-  },
-];
+type Conversation = {
+  id: string;
+  customerName: string;
+  productName?: string | null;
+  lastMessage?: string | null;
+  lastMessageAt: string;
+  unreadCount: number;
+  orderId?: string | null;
+};
 
 export default function SellerInboxScreen() {
   const { isVisible, setIsVisible } = useTabBar();
   const scrollY = useRef(0);
   const [lastScrollY, setLastScrollY] = useState(0);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchConversations = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const token = await api.getToken();
+        if (!token) {
+          setLoading(false);
+          return;
+        }
+
+        const API_BASE_URL =
+          process.env.EXPO_PUBLIC_API_URL || 'https://buyani-ecommerce-app-2kse.vercel.app/api';
+
+        const res = await fetch(`${API_BASE_URL}/conversations`, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            await api.clearToken();
+            setError('Unauthorized. Please log in again.');
+          } else {
+            setError('Failed to load conversations');
+          }
+          setConversations([]);
+          return;
+        }
+
+        const data = await res.json();
+
+        const mapped: Conversation[] = (data || []).map((conv: any) => ({
+          id: conv.id,
+          customerName: conv.customerName || 'Customer',
+          productName: conv.productName,
+          lastMessage: conv.lastMessage?.content || null,
+          lastMessageAt: conv.lastMessageAt || conv.lastMessage?.createdAt || conv.createdAt,
+          unreadCount: conv.unreadCount || 0,
+          orderId: conv.orderId || null,
+        }));
+
+        setConversations(mapped);
+      } catch (err: any) {
+        console.error('Error fetching conversations:', err);
+        setError(err?.message || 'Failed to load conversations');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchConversations();
+  }, []);
 
   const handleScroll = (event: any) => {
     const currentScrollY = event.nativeEvent.contentOffset.y;
@@ -81,47 +113,66 @@ export default function SellerInboxScreen() {
     scrollY.current = currentScrollY;
   };
 
-  const unreadCount = MESSAGES.filter((msg) => msg.unread).length;
+  const unreadCount = conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
 
   return (
     <ThemedView style={styles.container}>
       <FlatList
-        data={MESSAGES}
+        data={conversations}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={[styles.messageCard, styles.messageCardPadding]} activeOpacity={0.7}>
-            <View style={styles.messageContent}>
-              <View style={[styles.avatar, item.unread && styles.avatarUnread]}>
-                <ThemedText style={styles.avatarText}>{item.avatar}</ThemedText>
-              </View>
-              <View style={styles.messageInfo}>
-                <View style={styles.messageHeader}>
-                  <ThemedText type="defaultSemiBold" style={styles.customerName}>
-                    {item.customerName}
-                  </ThemedText>
-                  {item.unread && <View style={styles.unreadDot} />}
-                  <ThemedText style={styles.time}>{item.time}</ThemedText>
+        renderItem={({ item }) => {
+          const initials = item.customerName
+            .split(' ')
+            .map((part) => part[0])
+            .join('')
+            .slice(0, 2)
+            .toUpperCase();
+
+          const timeText = item.lastMessageAt
+            ? new Date(item.lastMessageAt).toLocaleString()
+            : '';
+
+          return (
+            <TouchableOpacity
+              style={[styles.messageCard, styles.messageCardPadding]}
+              activeOpacity={0.7}
+            >
+              <View style={styles.messageContent}>
+                <View style={[styles.avatar, item.unreadCount > 0 && styles.avatarUnread]}>
+                  <ThemedText style={styles.avatarText}>{initials}</ThemedText>
                 </View>
-                <ThemedText 
-                  style={[styles.lastMessage, item.unread && styles.lastMessageUnread]} 
-                  numberOfLines={1}
-                >
-                  {item.lastMessage}
-                </ThemedText>
-                {item.orderId && (
-                  <View style={styles.orderBadge}>
-                    <Ionicons name="receipt-outline" size={12} color="#2E7D32" />
-                    <ThemedText style={styles.orderId}>{item.orderId}</ThemedText>
+                <View style={styles.messageInfo}>
+                  <View style={styles.messageHeader}>
+                    <ThemedText type="defaultSemiBold" style={styles.customerName}>
+                      {item.customerName}
+                    </ThemedText>
+                    {item.unreadCount > 0 && <View style={styles.unreadDot} />}
+                    <ThemedText style={styles.time}>{timeText}</ThemedText>
                   </View>
-                )}
+                  <ThemedText
+                    style={[
+                      styles.lastMessage,
+                      item.unreadCount > 0 && styles.lastMessageUnread,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.lastMessage || item.productName || 'New conversation'}
+                  </ThemedText>
+                  {item.orderId && (
+                    <View style={styles.orderBadge}>
+                      <Ionicons name="receipt-outline" size={12} color="#2E7D32" />
+                      <ThemedText style={styles.orderId}>{item.orderId}</ThemedText>
+                    </View>
+                  )}
+                </View>
               </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#000000" />
-          </TouchableOpacity>
-        )}
+              <Ionicons name="chevron-forward" size={20} color="#000000" />
+            </TouchableOpacity>
+          );
+        }}
         ListHeaderComponent={
           <LinearGradient
             colors={['#2E7D32', '#4CAF50']}
@@ -148,8 +199,14 @@ export default function SellerInboxScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="mail-outline" size={64} color="#ccc" />
-            <ThemedText style={styles.emptyText}>No messages yet</ThemedText>
+            {loading ? (
+              <ThemedText style={styles.emptyText}>Loading messages...</ThemedText>
+            ) : (
+              <>
+                <Ionicons name="mail-outline" size={64} color="#ccc" />
+                <ThemedText style={styles.emptyText}>No messages yet</ThemedText>
+              </>
+            )}
           </View>
         }
       />

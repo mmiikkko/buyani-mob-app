@@ -41,7 +41,7 @@ export default function OrdersScreen() {
   const statusColor = (status?: string) => {
     const key = (status || '').toLowerCase();
     if (['delivered', 'completed', 'shipped', 'accepted', 'confirmed'].includes(key)) return '#10B981';
-    if (['pending'].includes(key)) return '#F59E0B';
+    if (['pending'].includes(key)) return '#F5821F'; // Orange for pending
     if (['cancelled', 'rejected'].includes(key)) return '#EF4444';
     return '#6B7280';
   };

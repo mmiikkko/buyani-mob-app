@@ -20,10 +20,12 @@ if (__DEV__) {
   }
 }
 
+export type UserRole = 'customer' | 'seller';
+
 export interface LoginRequest {
   email: string;
   password: string;
-  role: 'customer' | 'seller';
+  role: UserRole;
 }
 
 export interface SignupRequest {
@@ -33,7 +35,7 @@ export interface SignupRequest {
   firstName?: string;
   lastName?: string;
   name?: string; // For backward compatibility
-  role: 'customer' | 'seller';
+  role: UserRole;
   storeName?: string;
   ownerName?: string;
   phoneNumber?: string;
@@ -45,7 +47,7 @@ export interface AuthResponse {
   token: string;
   user: {
     email: string;
-    role: 'customer' | 'seller';
+    role: UserRole;
     name?: string;
   };
 }
@@ -270,8 +272,28 @@ export interface SellerShop {
   } | null;
 }
 
+export interface SellerStats {
+  totalSales: number;
+  totalOrders: number;
+  pendingOrders: number;
+  totalProducts: number;
+  activeProducts: number;
+  removedProducts: number;
+}
+
+export interface SellerRecentOrderSummary {
+  id: string;
+  orderCode?: string;
+  buyerName?: string;
+  total: number | null;
+  status: string;
+  createdAt: string;
+}
+
 class ApiClient {
   private baseUrl: string;
+  private static TOKEN_KEY = 'auth_token';
+  private static ROLE_KEY = 'user_role';
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
@@ -283,6 +305,7 @@ class ApiClient {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const token = await this.getToken();
+    const role = await this.getUserRole();
 
     if (__DEV__) {
       console.log(`📡 API Request: ${options.method || 'GET'} ${url}`);
@@ -291,6 +314,7 @@ class ApiClient {
       } else {
         console.log(`⚠️ No token`);
       }
+      console.log(`👤 Stored role: ${role || 'none'}`);
     }
 
     try {
@@ -303,9 +327,9 @@ class ApiClient {
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
-          ...options.headers,
-        },
+          ...(options.headers || {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        } as any,
       });
 
       clearTimeout(timeoutId);
@@ -339,8 +363,15 @@ class ApiClient {
           }
         }
         
-        // For 401 errors, provide more specific guidance
+        // For 401 errors, clear auth and provide more specific guidance
         if (response.status === 401) {
+          try {
+            await this.clearToken();
+            await this.clearUserRole();
+          } catch (clearError) {
+            console.error('Error clearing auth state after 401:', clearError);
+          }
+
           const authError = new Error('Unauthorized. Please log in again.');
           (authError as any).status = 401;
           (authError as any).details = errorDetails;
@@ -395,10 +426,16 @@ class ApiClient {
   }
 
   async login(data: LoginRequest): Promise<AuthResponse> {
-    return this.request<AuthResponse>('/auth/mobile-login', {
+    const response = await this.request<AuthResponse>('/auth/mobile-login', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    // Persist token and role immediately so the app knows the role right after login
+    await this.setToken(response.token);
+    if (response.user?.role) {
+      await this.setUserRole(response.user.role);
+    }
+    return response;
   }
 
   // Trigger a password reset email using the web auth flow
@@ -442,15 +479,21 @@ class ApiClient {
   }
 
   async signup(data: SignupRequest): Promise<AuthResponse> {
-    return this.request<AuthResponse>('/auth/mobile-register', {
+    const response = await this.request<AuthResponse>('/auth/mobile-register', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    // Persist token and role immediately for new accounts
+    await this.setToken(response.token);
+    if (response.user?.role) {
+      await this.setUserRole(response.user.role);
+    }
+    return response;
   }
 
   async setToken(token: string) {
     try {
-      await AsyncStorage.setItem('auth_token', token);
+      await AsyncStorage.setItem(ApiClient.TOKEN_KEY, token);
     } catch (error) {
       console.error('Error saving token:', error);
     }
@@ -458,7 +501,7 @@ class ApiClient {
 
   async getToken(): Promise<string | null> {
     try {
-      return await AsyncStorage.getItem('auth_token');
+      return await AsyncStorage.getItem(ApiClient.TOKEN_KEY);
     } catch (error) {
       console.error('Error getting token:', error);
       return null;
@@ -467,10 +510,60 @@ class ApiClient {
 
   async clearToken() {
     try {
-      await AsyncStorage.removeItem('auth_token');
+      await AsyncStorage.removeItem(ApiClient.TOKEN_KEY);
     } catch (error) {
       console.error('Error clearing token:', error);
     }
+  }
+
+  async setUserRole(role: UserRole | null) {
+    try {
+      if (!role) {
+        await AsyncStorage.removeItem(ApiClient.ROLE_KEY);
+      } else {
+        await AsyncStorage.setItem(ApiClient.ROLE_KEY, role);
+      }
+    } catch (error) {
+      console.error('Error saving user role:', error);
+    }
+  }
+
+  async getUserRole(): Promise<UserRole | null> {
+    try {
+      const value = await AsyncStorage.getItem(ApiClient.ROLE_KEY);
+      if (value === 'customer' || value === 'seller') {
+        return value;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting user role:', error);
+      return null;
+    }
+  }
+
+  async clearUserRole() {
+    try {
+      await AsyncStorage.removeItem(ApiClient.ROLE_KEY);
+    } catch (error) {
+      console.error('Error clearing user role:', error);
+    }
+  }
+
+  private async ensureSeller(endpointName: string) {
+    // Just ensure we have a token - let the backend determine seller status
+    // This matches how the web app works: authenticate first, backend checks shops
+    const token = await this.getToken();
+    if (!token || token === 'demo-token-offline-mode') {
+      throw new Error('No authentication token. Please log in again.');
+    }
+    
+    if (__DEV__) {
+      const role = await this.getUserRole();
+      console.log(`🔐 Seller endpoint ${endpointName} – token present, role cache: ${role || 'none'}`);
+    }
+    
+    // Don't check seller status here - let the backend API handle it
+    // Backend will return empty data if user has no shops (like web app does)
   }
 
   // Products API
@@ -638,6 +731,7 @@ class ApiClient {
 
   // Seller Products API
   async getSellerProducts(): Promise<SellerProduct[]> {
+    await this.ensureSeller('getSellerProducts');
     return this.request<SellerProduct[]>('/sellers/products');
   }
 
@@ -652,6 +746,7 @@ class ApiClient {
     stock?: number;
     images?: Array<{ image_url: string }>;
   }): Promise<{ success: boolean; productId: string; message: string }> {
+    await this.ensureSeller('createSellerProduct');
     return this.request('/sellers/products', {
       method: 'POST',
       body: JSON.stringify(product),
@@ -668,6 +763,7 @@ class ApiClient {
     stock?: number;
     images?: Array<{ image_url: string }>;
   }): Promise<{ success: boolean }> {
+    await this.ensureSeller('updateSellerProduct');
     const url = `/sellers/products?id=${encodeURIComponent(productId)}`;
     return this.request(url, {
       method: 'PUT',
@@ -677,6 +773,7 @@ class ApiClient {
 
   // Seller Orders API
   async getSellerOrders(): Promise<SellerOrder[]> {
+    await this.ensureSeller('getSellerOrders');
     return this.request<SellerOrder[]>('/sellers/orders');
   }
 
@@ -685,14 +782,57 @@ class ApiClient {
     message: string;
     status: string;
   }> {
+    await this.ensureSeller('updateSellerOrderStatus');
     return this.request(`/sellers/orders/${orderId}/status`, {
       method: 'PUT',
       body: JSON.stringify({ status }),
     });
   }
 
+  // Seller dashboard stats (same as web seller center)
+  async getSellerStats(days: number | 'all' = 'all'): Promise<SellerStats> {
+    await this.ensureSeller('getSellerStats');
+    const query = days === 'all' ? '' : `?days=${days}`;
+    return this.request<SellerStats>(`/sellers/stats${query}`);
+  }
+
+  // Optional: recent orders summary for dashboard (fallback to full orders if not available)
+  async getSellerRecentOrders(limit: number = 5): Promise<SellerRecentOrderSummary[]> {
+    await this.ensureSeller('getSellerRecentOrders');
+    try {
+      const data = await this.request<SellerRecentOrderSummary[]>(`/sellers/recent-orders`);
+      return Array.isArray(data) ? data.slice(0, limit) : [];
+    } catch (error: any) {
+      // If the endpoint is not available, gracefully fall back to full orders list
+      if (error?.status === 404) {
+        const orders = await this.getSellerOrders();
+        return orders
+          .slice(0, limit)
+          .map((o) => ({
+            id: o.id,
+            orderCode: o.id,
+            buyerName: o.buyerName,
+            total: o.total,
+            status: o.status,
+            createdAt: o.createdAt,
+          }));
+      }
+      throw error;
+    }
+  }
+
+  // General products API for product removal (used by seller center)
+  async deleteProduct(productId: string): Promise<{ success: boolean; message?: string }> {
+    await this.ensureSeller('deleteProduct');
+    const url = `/products?id=${encodeURIComponent(productId)}`;
+    return this.request(url, {
+      method: 'DELETE',
+    });
+  }
+
   // Seller Shop API
   async getSellerShop(): Promise<SellerShop> {
+    await this.ensureSeller('getSellerShop');
     return this.request<SellerShop>('/sellers/shop');
   }
 
@@ -701,6 +841,7 @@ class ApiClient {
     description?: string;
     imageURL?: string;
   }): Promise<{ success: boolean }> {
+    await this.ensureSeller('updateSellerShop');
     return this.request('/sellers/shop', {
       method: 'PUT',
       body: JSON.stringify(updates),

@@ -16,8 +16,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTabBar } from '@/contexts/tab-bar-context';
+import { api } from '@/lib/api';
 
-const SHOP_REGISTRATION_KEY = 'shop_registration';
+const SHOP_REGISTRATION_KEY_PREFIX = 'shop_registration_';
 
 interface ShopRegistration {
   shopName: string;
@@ -35,18 +36,36 @@ export default function BecomeSellerScreen() {
   const [isRegistered, setIsRegistered] = useState(false);
   const [registeredShop, setRegisteredShop] = useState<ShopRegistration | null>(null);
   const [isLoadingRegistration, setIsLoadingRegistration] = useState(true);
+  const [registrationKey, setRegistrationKey] = useState<string | null>(null);
 
   // Check if shop is already registered on mount
   useEffect(() => {
     const checkRegistration = async () => {
       try {
-        const registrationData = await AsyncStorage.getItem(SHOP_REGISTRATION_KEY);
+        // Require an authenticated user so registration is always scoped per account
+        const token = await api.getToken();
+        if (!token) {
+          setIsLoadingRegistration(false);
+          return;
+        }
+
+        const user = await api.getCurrentUser();
+        const userIdentifier = user?.id || user?.email;
+        if (!userIdentifier) {
+          setIsLoadingRegistration(false);
+          return;
+        }
+
+        const key = `${SHOP_REGISTRATION_KEY_PREFIX}${userIdentifier}`;
+        setRegistrationKey(key);
+
+        const registrationData = await AsyncStorage.getItem(key);
         if (registrationData) {
           const registration: ShopRegistration = JSON.parse(registrationData);
           // Default to approved if status is not set (for existing registrations)
           if (!registration.status) {
             registration.status = 'approved';
-            await AsyncStorage.setItem(SHOP_REGISTRATION_KEY, JSON.stringify(registration));
+            await AsyncStorage.setItem(key, JSON.stringify(registration));
           }
           setRegisteredShop(registration);
           setIsRegistered(true);
@@ -77,6 +96,11 @@ export default function BecomeSellerScreen() {
       return;
     }
 
+    if (!registrationKey) {
+      alert('Unable to determine your account. Please log in again and try registering your shop.');
+      return;
+    }
+
     setLoading(true);
     // TODO: Implement API call to register shop
     console.log('Registering shop:', { shopName, shopDescription });
@@ -89,7 +113,7 @@ export default function BecomeSellerScreen() {
     };
     
     try {
-      await AsyncStorage.setItem(SHOP_REGISTRATION_KEY, JSON.stringify(registration));
+      await AsyncStorage.setItem(registrationKey, JSON.stringify(registration));
       setRegisteredShop(registration);
       setIsRegistered(true);
       setLoading(false);

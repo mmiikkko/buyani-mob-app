@@ -88,11 +88,13 @@ export default function AccountScreen() {
           setUserName(user.name || user.email?.split('@')[0] || 'Buyani Customer');
           setUserEmail(user.email || 'customer@buyani.app');
 
-          // Treat user as seller if their role is 'seller' OR they already have a shop.
-          // This covers the case where they signed up as customer but later became a seller.
+          // Treat user as seller only if their role is SELLER or their shop
+          // status is fully approved. Pending/suspended applicants should
+          // still see the customer experience by default.
+          const shopStatus = user?.shop?.status;
           const isSeller =
             (typeof user.role === 'string' && user.role.toLowerCase() === 'seller') ||
-            (user.hasShop === true || !!user.shop);
+            shopStatus === 'approved';
           setUserRole(isSeller ? 'seller' : 'customer');
           
           // Generate initials from name or email
