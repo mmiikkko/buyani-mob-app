@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -26,6 +27,7 @@ export default function ProductDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [isAdding, setIsAdding] = useState(false);
 
   // Hide tab bar when component mounts
   useEffect(() => {
@@ -249,10 +251,17 @@ export default function ProductDetailScreen() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity
           style={[styles.addToCartButton, !product.isAvailable && styles.addToCartButtonDisabled]}
-          onPress={() => {
-            if (product.isAvailable) {
-              // TODO: Add to cart functionality
-              console.log('Add to cart:', product.id);
+          onPress={async () => {
+            if (!product.isAvailable || isAdding) return;
+            try {
+              setIsAdding(true);
+              await api.addToCart(product.id, 1);
+              router.push('/(tabs)/cart');
+            } catch (err: any) {
+              console.error('Failed to add to cart:', err);
+              Alert.alert('Cart', err.message || 'Failed to add to cart');
+            } finally {
+              setIsAdding(false);
             }
           }}
           disabled={!product.isAvailable}
@@ -260,7 +269,7 @@ export default function ProductDetailScreen() {
         >
           <Ionicons name="cart" size={20} color="#fff" />
           <ThemedText style={styles.addToCartText}>
-            {product.isAvailable ? 'Add to Cart' : 'Out of Stock'}
+            {product.isAvailable ? (isAdding ? 'Adding...' : 'Add to Cart') : 'Out of Stock'}
           </ThemedText>
         </TouchableOpacity>
       </View>
@@ -302,10 +311,11 @@ const styles = StyleSheet.create({
   },
   imageSection: {
     marginBottom: 24,
+    backgroundColor: '#f8f8f8',
   },
   mainImage: {
     width: '100%',
-    height: 400,
+    height: 420,
     backgroundColor: '#f8f8f8',
   },
   noImagePlaceholder: {
@@ -371,11 +381,13 @@ const styles = StyleSheet.create({
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#fff9e6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    gap: 6,
+    backgroundColor: '#FFF9E6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FFE082',
   },
   ratingText: {
     fontSize: 14,
@@ -383,26 +395,34 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   productPrice: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '700',
     color: '#50C878',
+    letterSpacing: 0.5,
   },
   shopInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    padding: 16,
-    backgroundColor: '#f5f7fa',
-    borderRadius: 12,
+    gap: 12,
+    padding: 18,
+    backgroundColor: '#F0F9F4',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E0F2E5',
   },
   shopName: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#50C878',
   },
   descriptionSection: {
-    gap: 8,
+    gap: 12,
+    backgroundColor: '#F9FAFB',
+    padding: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   sectionTitle: {
     fontSize: 18,
@@ -417,13 +437,18 @@ const styles = StyleSheet.create({
   },
   detailsSection: {
     gap: 12,
+    backgroundColor: '#F9FAFB',
+    padding: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#E5E7EB',
   },
   detailLabel: {
     fontSize: 14,

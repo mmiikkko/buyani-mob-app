@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, FlatList, View, TouchableOpacity, Platfo
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -62,6 +62,7 @@ function ProductCard({ item }: { item: Product }) {
 export default function AllProductsScreen() {
   const insets = useSafeAreaInsets();
   const { isVisible, setIsVisible } = useTabBar();
+  const { categoryId, categoryName } = useLocalSearchParams<{ categoryId?: string; categoryName?: string }>();
   const scrollY = useRef(0);
   const [lastScrollY, setLastScrollY] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
@@ -82,8 +83,18 @@ export default function AllProductsScreen() {
           api.getCategories(true).catch(() => []),
         ]);
         setAllProducts(productsData);
-        setProducts(productsData);
         setCategories(categoriesData);
+
+        // If we came from a specific category, pre-filter
+        if (categoryId) {
+          const filtered = productsData.filter(
+            (product) => product.categoryId === String(categoryId)
+          );
+          setSelectedCategory(String(categoryId));
+          setProducts(filtered);
+        } else {
+          setProducts(productsData);
+        }
       } catch (err: any) {
         console.error('Error fetching data:', err);
         setError(err.message || 'Failed to load products');
@@ -152,10 +163,14 @@ export default function AllProductsScreen() {
             </View>
             <View>
               <ThemedText type="title" style={styles.headerTitle}>
-                All Products
+                {categoryName ? String(categoryName) : 'All Products'}
               </ThemedText>
               <ThemedText style={styles.headerSubtitle}>
-                {loading ? 'Loading...' : `${products.length} amazing products`}
+                {loading
+                  ? 'Loading...'
+                  : categoryName
+                  ? `${products.length} item${products.length === 1 ? '' : 's'} in this category`
+                  : `${products.length} amazing products`}
               </ThemedText>
             </View>
           </View>

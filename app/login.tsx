@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { KeyboardAvoidingView } from 'react-native';
 import { Link, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -54,6 +55,10 @@ export default function LoginScreen() {
     opacity: opacity.value,
     transform: [{ translateY: translateY.value }],
   }));
+
+  const handleForgotPassword = () => {
+    router.push('/forgot-password' as Href);
+  };
 
   const handleLogin = async () => {
     setError(null);
@@ -133,9 +138,15 @@ export default function LoginScreen() {
   };
 
   return (
-    <ThemedView style={styles.wrapper}>
-      <Animated.View style={[{ flex: 1 }, animatedStyle]}>
-        <ScrollView
+<KeyboardAvoidingView
+    style={{ flex: 1 }}
+    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+  >
+  <ThemedView style={styles.wrapper}>
+    <Animated.View style={[{ flex: 1 }, animatedStyle]}>
+      <ScrollView
+
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
           bounces={false}
@@ -192,6 +203,14 @@ export default function LoginScreen() {
                   />
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                onPress={handleForgotPassword}
+                activeOpacity={0.7}
+              >
+                <ThemedText style={styles.forgotPasswordText}>
+                  Forgot password?
+                </ThemedText>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -233,6 +252,8 @@ export default function LoginScreen() {
         </ScrollView>
       </Animated.View>
     </ThemedView>
+    </KeyboardAvoidingView>
+
   );
 }
 
@@ -244,8 +265,8 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingVertical: 40,
-    paddingBottom: 60,
+    paddingVertical: 45,
+    paddingBottom: 50,
   },
   headerContainer: {
     alignItems: 'center',
@@ -256,6 +277,7 @@ const styles = StyleSheet.create({
     height: 140,
     borderRadius: 12,
     marginBottom: 24,
+    marginTop: 60,
   },
   title: {
     marginBottom: 8,
@@ -270,7 +292,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   formContainer: {
-    marginBottom: 24,
+    marginBottom: 1,
   },
   inputWrapper: {
     marginBottom: 20,
@@ -306,13 +328,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
   },
+  forgotPasswordText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#F5821F',
+    fontWeight: '600',
+    alignSelf: 'flex-end',
+  },
   eyeButton: {
     padding: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   button: {
-    marginTop: 8,
+    marginTop: 1,
     marginBottom: 16,
     paddingVertical: 16,
     borderRadius: 12,

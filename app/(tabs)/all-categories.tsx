@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -7,15 +8,42 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTabBar } from '@/contexts/tab-bar-context';
-import { api, type Category } from '@/lib/api';
+import { api, type Category, type Product } from '@/lib/api';
+
+// Hide this screen from the bottom tab bar – it behaves like a pushed page
+export const unstable_settings = {
+  href: null,
+};
 
 const CATEGORY_COLORS = ['#50C878', '#f5821f', '#50C878', '#f5821f', '#50C878', '#f5821f'];
+
+// Normalize category id from product payload (handles possible snake_case)
+const getProductCategoryId = (product: Product): string | null => {
+  const raw =
+    (product as any).categoryId ??
+    (product as any).category_id ??
+    (product as any).category?.id ??
+    null;
+  return raw !== null && raw !== undefined ? String(raw) : null;
+};
+
+// Best-effort category name from product, used as a fallback when ids don't line up
+const getProductCategoryName = (product: Product): string => {
+  const raw =
+    (product as any).categoryName ??
+    (product as any).category?.categoryName ??
+    (product as any).category_name ??
+    '';
+  return String(raw).trim().toLowerCase();
+};
 
 export default function AllCategoriesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { setIsVisible } = useTabBar();
   const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,22 +56,27 @@ export default function AllCategoriesScreen() {
   }, [setIsVisible]);
 
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
-        const data = await api.getCategories(true);
-        setCategories(data);
+        const [categoriesData, productsData] = await Promise.all([
+          api.getCategories(true),
+          api.getProducts().catch(() => []),
+        ]);
+        setCategories(categoriesData);
+        setProducts(productsData);
       } catch (err: any) {
-        console.error('Error fetching categories:', err);
+        console.error('Error fetching categories/products:', err);
         setError(err.message || 'Failed to load categories');
         setCategories([]);
+        setProducts([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCategories();
+    fetchData();
   }, []);
 
   return (
@@ -101,41 +134,134 @@ export default function AllCategoriesScreen() {
           </View>
         ) : (
           <View style={styles.categoriesGrid}>
-            {categories.map((category, index) => (
-              <TouchableOpacity
-                key={category.id}
-                style={[
-                  styles.categoryCard,
-                  { borderLeftColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length] },
-                ]}
-                activeOpacity={0.7}
-                onPress={() => {
-                  // TODO: Navigate to category products page
-                  console.log(`Category ${category.categoryName} pressed`);
-                }}
-              >
-                <View style={styles.categoryContent}>
-                  <View
+            {categories.map((category, index) => {
+              const isExpanded = expandedCategoryId === category.id;
+              const categoryIdStr = String(category.id);
+              const categoryNameKey = (category.categoryName || '').trim().toLowerCase();
+
+              const categoryProducts = products.filter((p) => {
+                const pid = getProductCategoryId(p);
+                if (pid && pid === categoryIdStr) {
+                  return true;
+                }
+
+                // Fallback: match by category name when ids don't line up
+                const pname = getProductCategoryName(p);
+                return pname === categoryNameKey;
+              });
+
+              return (
+                <View key={category.id}>
+                  <TouchableOpacity
                     style={[
-                      styles.categoryIcon,
-                      { backgroundColor: `${CATEGORY_COLORS[index % CATEGORY_COLORS.length]}20` },
+                      styles.categoryCard,
+                      { borderLeftColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length] },
                     ]}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setExpandedCategoryId(
+                        isExpanded ? null : category.id
+                      );
+                    }}
                   >
+                    <View style={styles.categoryContent}>
+                      <View
+                        style={[
+                          styles.categoryIcon,
+                          { backgroundColor: `${CATEGORY_COLORS[index % CATEGORY_COLORS.length]}20` },
+                        ]}
+                      >
+                        <Ionicons
+                          name="cube-outline"
+                          size={32}
+                          color={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}
+                        />
+                      </View>
+                      <View style={styles.categoryTexts}>
+                        <ThemedText type="defaultSemiBold" style={styles.categoryName}>
+                          {category.categoryName}
+                        </ThemedText>
+                        <ThemedText style={styles.categoryCount}>
+                          {category.productCount || 0}{' '}
+                          {(category.productCount || 0) === 1 ? 'product' : 'products'}
+                        </ThemedText>
+                      </View>
+                    </View>
                     <Ionicons
-                      name="cube-outline"
-                      size={32}
-                      color={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}
+                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                      size={18}
+                      color="#9CA3AF"
                     />
-                  </View>
-                  <ThemedText type="defaultSemiBold" style={styles.categoryName}>
-                    {category.categoryName}
-                  </ThemedText>
-                  <ThemedText style={styles.categoryCount}>
-                    {category.productCount || 0} {(category.productCount || 0) === 1 ? 'product' : 'products'}
-                  </ThemedText>
+                  </TouchableOpacity>
+
+                  {isExpanded && (
+                    <View style={styles.productsContainer}>
+                      {categoryProducts.length === 0 ? (
+                        <View style={styles.emptyProductsRow}>
+                          <ThemedText style={styles.emptyProductsText}>
+                            No products in this category yet.
+                          </ThemedText>
+                        </View>
+                      ) : (
+                        <View style={styles.productGrid}>
+                          {categoryProducts.map((product) => {
+                            let imageUrl: string | null = null;
+                            if (product.images && product.images.length > 0) {
+                              const first = product.images[0];
+                              if (first.image_url) {
+                                imageUrl = Array.isArray(first.image_url)
+                                  ? first.image_url[0] || null
+                                  : first.image_url;
+                              }
+                            }
+
+                            return (
+                              <TouchableOpacity
+                                key={product.id}
+                                style={styles.productCard}
+                                activeOpacity={0.85}
+                                onPress={() => router.push(`/(tabs)/product/${product.id}`)}
+                              >
+                                <View style={styles.productImageContainer}>
+                                  {imageUrl ? (
+                                    <Image
+                                      source={{ uri: imageUrl }}
+                                      style={styles.productImage}
+                                      contentFit="cover"
+                                      transition={150}
+                                    />
+                                  ) : (
+                                    <View style={styles.productImagePlaceholder}>
+                                      <Ionicons name="cube-outline" size={28} color="#9CA3AF" />
+                                    </View>
+                                  )}
+                                </View>
+                                <View style={styles.productCardBody}>
+                                  <ThemedText numberOfLines={2} style={styles.productName}>
+                                    {product.productName}
+                                  </ThemedText>
+                                  <ThemedText style={styles.productPrice}>
+                                    ₱{Number(product.price || 0).toFixed(2)}
+                                  </ThemedText>
+                                  {product.shopName && (
+                                    <View style={styles.productShopRow}>
+                                      <Ionicons name="storefront-outline" size={12} color="#9CA3AF" />
+                                      <ThemedText numberOfLines={1} style={styles.productShop}>
+                                        {product.shopName}
+                                      </ThemedText>
+                                    </View>
+                                  )}
+                                </View>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+                  )}
                 </View>
-              </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -219,30 +345,39 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   categoriesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
+    flexDirection: 'column',
+    gap: 12,
   },
   categoryCard: {
-    width: '47%',
+    width: '100%',
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
     borderLeftWidth: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
       },
       android: {
-        elevation: 2,
+        elevation: 1,
       },
     }),
   },
   categoryContent: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
+    flex: 1,
+  },
+  categoryTexts: {
+    flex: 1,
   },
   categoryIcon: {
     width: 64,
@@ -250,17 +385,95 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 0,
   },
   categoryName: {
-    fontSize: 16,
-    marginBottom: 8,
-    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '600',
     color: '#000',
   },
   categoryCount: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  productsContainer: {
+    marginTop: 4,
+    marginBottom: 12,
+    marginLeft: 16,
+    paddingLeft: 8,
+    borderLeftWidth: 1,
+    borderLeftColor: '#E5E7EB',
+    gap: 8,
+  },
+  productGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  productCard: {
+    width: '47%',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  productImageContainer: {
+    width: '100%',
+    height: 130,
+    backgroundColor: '#F3F4F6',
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
+  productImagePlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productCardBody: {
+    padding: 12,
+    gap: 6,
+  },
+  productName: {
+    fontSize: 13,
+    color: '#111827',
+    lineHeight: 18,
+  },
+  productPrice: {
+    fontSize: 14,
+    color: '#16A34A',
+    fontWeight: '600',
+  },
+  productShopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  productShop: {
     fontSize: 12,
-    color: '#666',
+    color: '#9CA3AF',
+    flex: 1,
+  },
+  emptyProductsRow: {
+    paddingVertical: 4,
+  },
+  emptyProductsText: {
+    fontSize: 13,
+    color: '#9CA3AF',
   },
 });
 

@@ -8,7 +8,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  View,
+  View,KeyboardAvoidingView,
 } from 'react-native';
 import Animated, {
   Easing,
@@ -174,9 +174,16 @@ export default function SignupScreen() {
   };
 
   return (
-    <ThemedView style={[styles.wrapper, isSeller && styles.wrapperSeller]}>
-      <Animated.View style={[{ flex: 1 }, animatedStyle]}>
-        <ScrollView
+    <KeyboardAvoidingView
+    style={{ flex: 1 }}
+    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+  >
+  
+        <ThemedView style={[styles.wrapper, isSeller && styles.wrapperSeller]}>
+          <Animated.View style={[{ flex: 1 }, animatedStyle]}>
+            <ScrollView
+    
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
           bounces={false}
@@ -394,6 +401,7 @@ export default function SignupScreen() {
         </ScrollView>
       </Animated.View>
     </ThemedView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -434,7 +442,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   formContainer: {
-    marginBottom: 24,
+    marginBottom: 1,
   },
   inputWrapper: {
     marginBottom: 20,

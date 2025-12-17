@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTabBar } from '@/contexts/tab-bar-context';
-import { api, type Shop, type Product } from '@/lib/api';
+import { api, type Product, type Shop } from '@/lib/api';
 
 function ShopProductCard({ item, onPress }: { item: Product; onPress: () => void }) {
   const imageUrl = item.images && item.images.length > 0 && item.images[0].image_url 
@@ -187,50 +187,109 @@ export default function ShopDetailScreen() {
         </View>
 
         {/* Shop Header */}
-        <LinearGradient
-          colors={['#FFE082', '#C5E1A5', '#E8F5E9']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.shopHeader}
-        >
-          {shop.image && (
+        {shop.image ? (
+          <View style={styles.shopHeader}>
             <Image source={{ uri: shop.image }} style={styles.shopHeaderImage} contentFit="cover" />
-          )}
-          <View style={styles.shopHeaderContent}>
-            <View style={styles.shopIcon}>
-              <Ionicons name="storefront" size={48} color="#1976D2" />
-            </View>
+            <View style={styles.shopHeaderOverlay} />
           </View>
-        </LinearGradient>
+        ) : (
+          <LinearGradient
+            colors={['#50C878', '#45B869', '#3DA85A']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.shopHeader}
+          >
+            <View style={styles.shopHeaderContent}>
+              <View style={styles.shopIcon}>
+                <Ionicons name="storefront" size={48} color="#FFFFFF" />
+              </View>
+            </View>
+          </LinearGradient>
+        )}
 
         {/* Shop Info */}
         <View style={styles.shopInfo}>
-          <ThemedText type="title" style={styles.shopName}>
-            {shop.shop_name}
-          </ThemedText>
-          
-          {shop.shop_rating && (
-            <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={20} color="#FFC107" />
-              <ThemedText style={styles.ratingText}>{shop.shop_rating}</ThemedText>
-            </View>
-          )}
+          <View style={styles.shopNameContainer}>
+            <ThemedText type="title" style={styles.shopName}>
+              {shop.shop_name}
+            </ThemedText>
+            {shop.shop_rating && (
+              <View style={styles.ratingContainer}>
+                <Ionicons name="star" size={18} color="#FFC107" />
+                <ThemedText style={styles.ratingText}>{shop.shop_rating}</ThemedText>
+              </View>
+            )}
+          </View>
 
           {shop.description && (
             <ThemedText style={styles.shopDescription}>{shop.description}</ThemedText>
           )}
 
+          {/* Meta chips – owner, products, status */}
           <View style={styles.shopMeta}>
-            <View style={styles.metaItem}>
-              <Ionicons name="person-outline" size={16} color="#666" />
-              <ThemedText style={styles.metaText}>Owner: {shop.owner_name}</ThemedText>
-            </View>
-            <View style={styles.metaItem}>
-              <Ionicons name="cube-outline" size={16} color="#666" />
-              <ThemedText style={styles.metaText}>
-                {shop.products} {shop.products === 1 ? 'product' : 'products'}
+            {/* Owner */}
+            {shop.owner_name && (
+              <View style={styles.metaChip}>
+                <Ionicons name="person-circle-outline" size={16} color="#4F46E5" />
+                <ThemedText style={styles.metaChipText}>
+                  {shop.owner_name}
+                </ThemedText>
+              </View>
+            )}
+
+            {/* Product count */}
+            <View style={styles.metaChip}>
+              <Ionicons name="cube-outline" size={16} color="#16A34A" />
+              <ThemedText style={styles.metaChipText}>
+                {(products?.length ?? shop.products) || 0}{' '}
+                {(products?.length ?? shop.products) === 1 ? 'product' : 'products'}
               </ThemedText>
             </View>
+
+            {/* Status */}
+            {shop.status && (
+              <View
+                style={[
+                  styles.metaChip,
+                  styles.statusChip,
+                  shop.status === 'approved'
+                    ? styles.statusApproved
+                    : shop.status === 'pending'
+                    ? styles.statusPending
+                    : styles.statusRejected,
+                ]}
+              >
+                <Ionicons
+                  name={
+                    shop.status === 'approved'
+                      ? 'checkmark-circle'
+                      : shop.status === 'pending'
+                      ? 'time-outline'
+                      : 'close-circle'
+                  }
+                  size={16}
+                  color={
+                    shop.status === 'approved'
+                      ? '#166534'
+                      : shop.status === 'pending'
+                      ? '#92400E'
+                      : '#991B1B'
+                  }
+                />
+                <ThemedText
+                  style={[
+                    styles.metaChipText,
+                    shop.status === 'approved'
+                      ? styles.statusApprovedText
+                      : shop.status === 'pending'
+                      ? styles.statusPendingText
+                      : styles.statusRejectedText,
+                  ]}
+                >
+                  {shop.status}
+                </ThemedText>
+              </View>
+            )}
           </View>
         </View>
 
@@ -238,7 +297,10 @@ export default function ShopDetailScreen() {
         <View style={styles.productsSection}>
           <View style={styles.sectionHeader}>
             <ThemedText type="title" style={styles.sectionTitle}>
-              Products ({products.length})
+              Products from {shop.shop_name}
+            </ThemedText>
+            <ThemedText style={styles.sectionSubtitle}>
+              {products.length} {products.length === 1 ? 'item' : 'items'} available
             </ThemedText>
           </View>
 
@@ -298,7 +360,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   shopHeader: {
-    height: 200,
+    height: 240,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -307,8 +369,14 @@ const styles = StyleSheet.create({
   shopHeaderImage: {
     width: '100%',
     height: '100%',
+  },
+  shopHeaderOverlay: {
     position: 'absolute',
-    opacity: 0.3,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
   },
   shopHeaderContent: {
     alignItems: 'center',
@@ -336,22 +404,30 @@ const styles = StyleSheet.create({
   shopInfo: {
     paddingHorizontal: 20,
     marginBottom: 32,
+    gap: 16,
+  },
+  shopNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
+    flexWrap: 'wrap',
   },
   shopName: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
     color: '#000',
+    flex: 1,
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#fff9e6',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    alignSelf: 'flex-start',
+    backgroundColor: '#FFF9E6',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#FFE082',
   },
   ratingText: {
     fontSize: 16,
@@ -365,17 +441,47 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   shopMeta: {
-    marginTop: 16,
-    gap: 8,
+    marginTop: 18,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  metaItem: {
+  metaChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 6,
   },
-  metaText: {
-    fontSize: 14,
-    color: '#666',
+  metaChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  statusChip: {
+    borderWidth: 0,
+  },
+  statusApproved: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusPending: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusRejected: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusApprovedText: {
+    color: '#166534',
+  },
+  statusPendingText: {
+    color: '#92400E',
+  },
+  statusRejectedText: {
+    color: '#991B1B',
   },
   productsSection: {
     paddingHorizontal: 20,
@@ -388,6 +494,11 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: '#000',
+  },
+  sectionSubtitle: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#6B7280',
   },
   productsGrid: {
     gap: 16,

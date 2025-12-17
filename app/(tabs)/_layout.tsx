@@ -4,9 +4,8 @@ import { LayoutAnimation, Platform, UIManager } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { TabBarProvider, useTabBar } from '@/contexts/tab-bar-context';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -16,6 +15,10 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 function TabLayoutContent() {
   const colorScheme = useColorScheme();
   const { isVisible } = useTabBar();
+  const hiddenScreenOptions = {
+    // Hide this route from the visible tab bar while keeping the screen usable
+    href: null,
+  } as const;
 
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -27,38 +30,36 @@ function TabLayoutContent() {
         tabBarActiveTintColor: '#50C878',
         tabBarInactiveTintColor: '#9CA3AF',
         headerShown: false,
-        tabBarButton: HapticTab,
         tabBarShowLabel: false,
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
-          height: Platform.OS === 'ios' ? 88 : 70,
-          paddingBottom: Platform.OS === 'ios' ? 32 : 12,
-          paddingTop: 12,
-          marginBottom: 0,
-          marginHorizontal: 0,
-          borderRadius: 0,
-          position: 'absolute',
-          opacity: isVisible ? 1 : 0,
-          transform: [{ translateY: isVisible ? 0 : 100 }],
-          ...Platform.select({
-            ios: {
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: -2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 8,
-            },
-            android: {
-              elevation: 8,
-            },
-            web: {
-              boxShadow: '0px -2px 8px 0px rgba(0, 0, 0, 0.1)',
-            },
-          }),
-          // @ts-ignore - pointerEvents should be in style for web compatibility
-          pointerEvents: isVisible ? 'auto' : 'none',
-        },
+            backgroundColor: '#FFFFFF',
+            height: Platform.OS === 'ios' ? 80 : 68,
+            paddingBottom: Platform.OS === 'ios' ? 22 : 12,
+            paddingTop: 10,
+            marginBottom: 18,
+            marginHorizontal: 18,
+            borderRadius: 26,
+            borderTopWidth: 0,
+            position: 'absolute',
+            opacity: isVisible ? 1 : 0,
+            transform: [{ translateY: isVisible ? 0 : 100 }],
+            ...Platform.select({
+              ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.12,
+                shadowRadius: 18,
+              },
+              android: {
+                elevation: 10,
+              },
+              web: {
+                boxShadow: '0px 10px 30px rgba(15, 23, 42, 0.25)',
+              },
+            }),
+            // @ts-ignore - pointerEvents should be in style for web compatibility
+            pointerEvents: isVisible ? 'auto' : 'none',
+          },
         tabBarIconStyle: {
           marginTop: 0,
         },
@@ -67,6 +68,7 @@ function TabLayoutContent() {
         name="index"
         options={{
           title: 'Home',
+          tabBarButton: HapticTab,
           tabBarIcon: ({ focused }) => (
             <IconSymbol
               size={focused ? 26 : 24}
@@ -80,6 +82,7 @@ function TabLayoutContent() {
         name="all-products"
         options={{
           title: 'Products',
+          tabBarButton: HapticTab,
           tabBarIcon: ({ focused }) => (
             <IconSymbol
               size={focused ? 26 : 24}
@@ -93,6 +96,7 @@ function TabLayoutContent() {
         name="all-vendors"
         options={{
           title: 'Shops',
+          tabBarButton: HapticTab,
           tabBarIcon: ({ focused }) => (
             <IconSymbol
               size={focused ? 26 : 24}
@@ -106,6 +110,7 @@ function TabLayoutContent() {
         name="account"
         options={{
           title: 'Account',
+          tabBarButton: HapticTab,
           tabBarIcon: ({ focused }) => (
             <IconSymbol
               size={focused ? 26 : 24}
@@ -117,87 +122,59 @@ function TabLayoutContent() {
       />
       <Tabs.Screen
         name="cart"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
+      />
+      <Tabs.Screen
+        name="checkout"
+        options={hiddenScreenOptions}
       />
       <Tabs.Screen
         name="search"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
       />
       <Tabs.Screen
         name="edit-profile"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
       />
       <Tabs.Screen
         name="support"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
       />
       <Tabs.Screen
         name="privacy-security"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
       />
       <Tabs.Screen
         name="become-seller"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
       />
       <Tabs.Screen
         name="shop-application-status"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
       />
       <Tabs.Screen
         name="orders"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
       />
       <Tabs.Screen
         name="address"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
       />
       <Tabs.Screen
         name="payments"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
       />
       <Tabs.Screen
         name="settings"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-      <Tabs.Screen
-        name="all-best-sellers"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
       />
       <Tabs.Screen
         name="all-categories"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
       />
       <Tabs.Screen
         name="notifications"
-        options={{
-          href: null, // Hide from tab bar
-        }}
+        options={hiddenScreenOptions}
       />
     </Tabs>
   );

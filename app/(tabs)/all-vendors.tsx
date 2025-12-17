@@ -46,13 +46,23 @@ export default function AllVendorsScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+      <LinearGradient
+        colors={['#50C878', '#40B068', '#35A05A']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + 16 }]}
+      >
         <View style={styles.placeholder} />
-        <ThemedText type="title" style={styles.headerTitle}>
-          All Shops
-        </ThemedText>
+        <View style={styles.headerContent}>
+          <View style={styles.headerIconContainer}>
+            <Ionicons name="storefront" size={24} color="#fff" />
+          </View>
+          <ThemedText type="title" style={styles.headerTitle}>
+            All Shops
+          </ThemedText>
+        </View>
         <View style={styles.placeholder} />
-      </View>
+      </LinearGradient>
 
       <ScrollView
         contentContainerStyle={[
@@ -101,19 +111,22 @@ export default function AllVendorsScreen() {
                   router.push(`/(tabs)/shop/${shop.id}`);
                 }}
               >
-                <LinearGradient
-                  colors={['#FFE082', '#C5E1A5', '#E8F5E9']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={styles.vendorCardHeader}
-                >
-                  {shop.image && (
+                {shop.image ? (
+                  <View style={styles.vendorCardHeader}>
                     <Image source={{ uri: shop.image }} style={styles.vendorImage} contentFit="cover" />
-                  )}
-                  <View style={styles.vendorIcon}>
-                    <Ionicons name="storefront-outline" size={36} color="#1976D2" />
                   </View>
-                </LinearGradient>
+                ) : (
+                  <LinearGradient
+                    colors={['#50C878', '#45B869', '#3DA85A']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.vendorCardHeader}
+                  >
+                    <View style={styles.vendorIcon}>
+                      <Ionicons name="storefront" size={36} color="#FFFFFF" />
+                    </View>
+                  </LinearGradient>
+                )}
                 <View style={styles.vendorCardBody}>
                   <ThemedText type="defaultSemiBold" style={styles.vendorShopName} numberOfLines={1}>
                     {shop.shop_name}
@@ -126,9 +139,6 @@ export default function AllVendorsScreen() {
                   )}
                   <ThemedText style={styles.vendorProductCount}>
                     {shop.products} {shop.products === 1 ? 'product' : 'products'}
-                  </ThemedText>
-                  <ThemedText style={styles.vendorSellerName} numberOfLines={1}>
-                    by {shop.owner_name}
                   </ThemedText>
                 </View>
               </TouchableOpacity>
@@ -150,32 +160,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingBottom: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e8e8e8',
+    paddingBottom: 24,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 2,
+        elevation: 8,
       },
       web: {
-        boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.05)',
+        boxShadow: '0px 4px 12px 0px rgba(0, 0, 0, 0.15)',
       },
     }),
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   backButton: {
     padding: 8,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
-    color: '#333',
+    color: '#fff',
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   placeholder: {
     width: 40,
@@ -223,40 +250,45 @@ const styles = StyleSheet.create({
   vendorCard: {
     width: '47%',
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#e8e8e8',
+    borderColor: '#F0F0F0',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 2,
+        elevation: 4,
+      },
+      web: {
+        boxShadow: '0px 4px 12px 0px rgba(0, 0, 0, 0.1)',
       },
     }),
   },
   vendorCardHeader: {
-    height: 120,
+    height: 140,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    overflow: 'hidden',
   },
   vendorImage: {
     width: '100%',
     height: '100%',
-    position: 'absolute',
   },
   vendorIcon: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   vendorCardBody: {
     padding: 18,
@@ -271,20 +303,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: '#FFF9E6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
   },
   vendorRatingText: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: '#F59E0B',
     fontWeight: '600',
   },
   vendorProductCount: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#666',
-  },
-  vendorSellerName: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
+    fontWeight: '500',
   },
 });
 

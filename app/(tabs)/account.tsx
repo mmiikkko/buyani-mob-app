@@ -70,6 +70,7 @@ export default function AccountScreen() {
   const [userName, setUserName] = useState('Buyani Customer');
   const [userEmail, setUserEmail] = useState('customer@buyani.app');
   const [userInitials, setUserInitials] = useState('B');
+  const [userRole, setUserRole] = useState<'customer' | 'seller'>('customer');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -86,6 +87,13 @@ export default function AccountScreen() {
         if (user) {
           setUserName(user.name || user.email?.split('@')[0] || 'Buyani Customer');
           setUserEmail(user.email || 'customer@buyani.app');
+
+          // Treat user as seller if their role is 'seller' OR they already have a shop.
+          // This covers the case where they signed up as customer but later became a seller.
+          const isSeller =
+            (typeof user.role === 'string' && user.role.toLowerCase() === 'seller') ||
+            (user.hasShop === true || !!user.shop);
+          setUserRole(isSeller ? 'seller' : 'customer');
           
           // Generate initials from name or email
           const name = user.name || user.email?.split('@')[0] || '';
@@ -250,39 +258,53 @@ export default function AccountScreen() {
         <View style={styles.section}>
           <ThemedText style={styles.sectionTitle}>Quick Actions</ThemedText>
           <View style={styles.quickActions}>
-            {MENU_ITEMS.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.quickActionCard}
-                activeOpacity={0.8}
-                onPress={() => {
-                  if (item.id === 'support') {
-                    router.push('/(tabs)/support');
-                  } else if (item.id === 'seller') {
-                    router.push('/(tabs)/become-seller');
-                  } else if (item.id === 'orders') {
-                    router.push('/(tabs)/orders');
-                  } else if (item.id === 'address') {
-                    router.push('/(tabs)/address');
-                  } else if (item.id === 'payments') {
-                    router.push('/(tabs)/payments');
-                  }
-                }}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: `${item.color}15` }]}>
-                  <Ionicons name={item.icon as any} size={24} color={item.color} />
-                </View>
-                <View style={styles.quickActionContent}>
-                  <ThemedText type="defaultSemiBold" style={styles.quickActionLabel}>
-                    {item.label}
-                  </ThemedText>
-                  <ThemedText style={styles.quickActionDescription}>
-                    {item.description}
-                  </ThemedText>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="#ccc" />
-              </TouchableOpacity>
-            ))}
+            {MENU_ITEMS.map((item) => {
+              const isSellerQuickAction = item.id === 'seller' && userRole === 'seller';
+              const label = isSellerQuickAction ? 'Go to Seller Dashboard' : item.label;
+              const description = isSellerQuickAction
+                ? 'You already have a seller shop. Manage your products and orders here.'
+                : item.description;
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.quickActionCard}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    if (item.id === 'support') {
+                      router.push('/(tabs)/support');
+                    } else if (item.id === 'seller') {
+                      if (userRole === 'seller') {
+                        // Go to seller home/dashboard for sellers
+                        router.push('/seller');
+                      } else {
+                        // Normal become-seller flow for customers
+                        router.push('/(tabs)/become-seller');
+                      }
+                    } else if (item.id === 'orders') {
+                      router.push('/(tabs)/orders');
+                    } else if (item.id === 'address') {
+                      router.push('/(tabs)/address');
+                    } else if (item.id === 'payments') {
+                      router.push('/(tabs)/payments');
+                    }
+                  }}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: `${item.color}15` }]}>
+                    <Ionicons name={item.icon as any} size={24} color={item.color} />
+                  </View>
+                  <View style={styles.quickActionContent}>
+                    <ThemedText type="defaultSemiBold" style={styles.quickActionLabel}>
+                      {label}
+                    </ThemedText>
+                    <ThemedText style={styles.quickActionDescription}>
+                      {description}
+                    </ThemedText>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 

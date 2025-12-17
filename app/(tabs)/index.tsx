@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   FlatList,
   Linking,
@@ -26,112 +27,258 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Category colors for display
 const CATEGORY_COLORS = ['#50C878', '#f5821f', '#50C878', '#f5821f', '#50C878', '#f5821f'];
 
-function CategoryCard({ item, color }: { item: Category; color: string }) {
-  return (
-    <TouchableOpacity
-      style={styles.categoryCard}
-      activeOpacity={0.7}
-      onPress={() => {
-        // TODO: Navigate to category page
-        console.log(`Category ${item.categoryName} pressed`);
-      }}
-    >
-      <View style={styles.categoryIconContainer}>
-        <View style={[styles.categoryIcon, { backgroundColor: `${color}20` }]}>
-          <Ionicons name="cube-outline" size={28} color={color} />
-        </View>
-      </View>
-      <ThemedText type="defaultSemiBold" style={styles.categoryLabel}>
-        {item.categoryName}
-      </ThemedText>
-      <View style={styles.categoryInfo}>
-        <View style={[styles.categoryDot, { backgroundColor: color }]} />
-        <ThemedText style={styles.categoryItemCount}>
-          {item.productCount || 0} {(item.productCount || 0) === 1 ? 'item' : 'items'}
-        </ThemedText>
-      </View>
-    </TouchableOpacity>
-  );
-}
+// Approx width of one category item (card + spacing) for pager movement
+const CATEGORY_ITEM_WIDTH = 90 + 16;
 
-function ProductCard({ item }: { item: Product }) {
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList as any);
+
+function CategoryCard({ item, color, index }: { item: Category; color: string; index: number }) {
   const router = useRouter();
-  const imageUrl = item.images && item.images.length > 0 && item.images[0].image_url 
-    ? item.images[0].image_url[0] 
-    : null;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        delay: index * 50,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        delay: index * 50,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   return (
-    <TouchableOpacity
-      style={styles.productCard}
-      activeOpacity={0.8}
-      onPress={() => {
-        router.push(`/(tabs)/product/${item.id}`);
-      }}
+    <Animated.View
+      style={[
+        { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+      ]}
     >
-      <View style={styles.productImageContainer}>
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.productImage} contentFit="cover" />
-        ) : (
-          <View style={styles.noImagePlaceholder}>
-            <Ionicons name="image-outline" size={32} color="#ccc" />
-            <ThemedText style={styles.noImageText}>No image</ThemedText>
-          </View>
-        )}
-      </View>
-      <View style={styles.productInfo}>
-        <ThemedText type="defaultSemiBold" style={styles.productName} numberOfLines={2}>
-          {item.productName}
-        </ThemedText>
-        <ThemedText style={styles.productPrice}>P{Number(item.price).toFixed(2)}</ThemedText>
-        <ThemedText style={styles.productShopName} numberOfLines={1}>
-          {item.shopName}
-        </ThemedText>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function VendorCard({ item }: { item: Shop }) {
-  const router = useRouter();
-  return (
-    <TouchableOpacity
-      style={styles.vendorCard}
-      activeOpacity={0.8}
-      onPress={() => {
-        router.push(`/(tabs)/shop/${item.id}`);
-      }}
-    >
-      <LinearGradient
-        colors={['#FFE082', '#C5E1A5', '#E8F5E9']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.vendorCardHeader}
+      <TouchableOpacity
+        style={styles.categoryCard}
+        activeOpacity={0.8}
+        onPress={() => {
+          // Go to All Products, filtered by this category
+          router.push({
+            pathname: '/(tabs)/all-products',
+            params: {
+              categoryId: item.id,
+              categoryName: item.categoryName,
+            },
+          });
+        }}
       >
-        {item.image && (
-          <Image source={{ uri: item.image }} style={styles.vendorImage} contentFit="cover" />
-        )}
-        <View style={styles.vendorIcon}>
-          <Ionicons name="storefront-outline" size={36} color="#1976D2" />
+        <View style={styles.categoryIconContainer}>
+          <LinearGradient
+            colors={[`${color}15`, `${color}08`]}
+            style={styles.categoryIcon}
+          >
+            <Ionicons name="cube-outline" size={32} color={color} />
+          </LinearGradient>
         </View>
-      </LinearGradient>
-      <View style={styles.vendorCardBody}>
-        <ThemedText type="defaultSemiBold" style={styles.vendorShopName} numberOfLines={1}>
-          {item.shop_name}
+        <ThemedText type="defaultSemiBold" style={styles.categoryLabel}>
+          {item.categoryName}
         </ThemedText>
-        {item.shop_rating && (
-          <View style={styles.vendorRating}>
-            <Ionicons name="star" size={16} color="#FFC107" />
-            <ThemedText style={styles.vendorRatingText}>{item.shop_rating}</ThemedText>
-          </View>
+        {item.productCount !== undefined && (
+          item.productCount > 0 ? (
+            <View style={styles.categoryInfo}>
+              <View style={[styles.categoryDot, { backgroundColor: color }]} />
+              <ThemedText style={styles.categoryItemCount}>
+                {item.productCount} {item.productCount === 1 ? 'item' : 'items'}
+              </ThemedText>
+            </View>
+          ) : (
+            <View style={styles.categoryInfo}>
+              <View style={[styles.categoryDot, { backgroundColor: '#E5E7EB' }]} />
+              <ThemedText style={styles.categoryItemCountEmpty}>
+                No items yet
+              </ThemedText>
+            </View>
+          )
         )}
-        <ThemedText style={styles.vendorProductCount}>
-          {item.products} {item.products === 1 ? 'product' : 'products'}
-        </ThemedText>
-        <ThemedText style={styles.vendorSellerName} numberOfLines={1}>
-          by {item.owner_name}
-        </ThemedText>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+function ProductCard({ item, index }: { item: Product; index: number }) {
+  const router = useRouter();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(50)).current;
+  
+  // Handle different image URL formats
+  let imageUrl: string | null = null;
+  if (item.images && item.images.length > 0) {
+    const firstImage = item.images[0];
+    if (firstImage.image_url) {
+      if (Array.isArray(firstImage.image_url)) {
+        imageUrl = firstImage.image_url[0] || null;
+      } else {
+        imageUrl = firstImage.image_url;
+      }
+    }
+  }
+
+  useEffect(() => {
+    // Start animation immediately, no delay for first item
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        delay: Math.min(index * 50, 200), // Cap delay at 200ms
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateX, {
+        toValue: 0,
+        duration: 300,
+        delay: Math.min(index * 50, 200),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [index, fadeAnim, translateX]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.productCardWrapper,
+        { opacity: fadeAnim, transform: [{ translateX }] },
+      ]}
+    >
+      <TouchableOpacity
+        style={styles.productCard}
+        activeOpacity={0.85}
+        onPress={() => {
+          router.push(`/(tabs)/product/${item.id}`);
+        }}
+      >
+        <View style={styles.productImageContainer}>
+          {imageUrl ? (
+            <Image 
+              source={{ uri: imageUrl }} 
+              style={styles.productImage} 
+              contentFit="cover"
+              transition={200}
+            />
+          ) : (
+            <LinearGradient
+              colors={['#F3F4F6', '#E5E7EB']}
+              style={styles.noImagePlaceholder}
+            >
+              <Ionicons name="image-outline" size={32} color="#9CA3AF" />
+            </LinearGradient>
+          )}
+          {item.stock !== undefined && item.stock > 0 && (
+            <View style={styles.stockBadge}>
+              <ThemedText style={styles.stockBadgeText}>In Stock</ThemedText>
+            </View>
+          )}
+        </View>
+        <View style={styles.productInfo}>
+          <ThemedText type="defaultSemiBold" style={styles.productName} numberOfLines={2}>
+            {item.productName || 'Product'}
+          </ThemedText>
+          <View style={styles.productPriceRow}>
+            <ThemedText style={styles.productPrice}>₱{Number(item.price || 0).toFixed(2)}</ThemedText>
+            {item.rating && (
+              <View style={styles.ratingBadge}>
+                <Ionicons name="star" size={12} color="#FFC107" />
+                <ThemedText style={styles.ratingText}>{item.rating}</ThemedText>
+              </View>
+            )}
+          </View>
+          {item.shopName && (
+            <ThemedText style={styles.productShopName} numberOfLines={1}>
+              {item.shopName}
+            </ThemedText>
+          )}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+function VendorCard({ item, index }: { item: Shop; index: number }) {
+  const router = useRouter();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(50)).current;
+  const hasLogo = !!item.image;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        delay: index * 80,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateX, {
+        toValue: 0,
+        duration: 400,
+        delay: index * 80,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [index]);
+
+  return (
+    <Animated.View
+      style={[
+        { opacity: fadeAnim, transform: [{ translateX }] },
+      ]}
+    >
+      <TouchableOpacity
+        style={styles.vendorCard}
+        activeOpacity={0.85}
+        onPress={() => {
+          router.push(`/(tabs)/shop/${item.id}`);
+        }}
+      >
+        {hasLogo ? (
+          // If shop has logo, show it without icon overlay
+          <View style={styles.vendorCardHeader}>
+            <Image 
+              source={{ uri: item.image }} 
+              style={styles.vendorImage} 
+              contentFit="cover"
+              transition={200}
+            />
+          </View>
+        ) : (
+          // If no logo, show gradient with icon
+          <LinearGradient
+            colors={['#50C878', '#45B869', '#3DA85A']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.vendorCardHeader}
+          >
+            <View style={styles.vendorIcon}>
+              <Ionicons name="storefront" size={40} color="#FFFFFF" />
+            </View>
+          </LinearGradient>
+        )}
+        <View style={styles.vendorCardBody}>
+          <ThemedText type="defaultSemiBold" style={styles.vendorShopName} numberOfLines={1}>
+            {item.shop_name}
+          </ThemedText>
+          {item.shop_rating && (
+            <View style={styles.vendorRating}>
+              <Ionicons name="star" size={14} color="#FFC107" />
+              <ThemedText style={styles.vendorRatingText}>{item.shop_rating}</ThemedText>
+            </View>
+          )}
+          <ThemedText style={styles.vendorProductCount}>
+            {item.products} {item.products === 1 ? 'product' : 'products'}
+          </ThemedText>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -141,6 +288,7 @@ export default function HomeScreen() {
   const { isVisible, setIsVisible } = useTabBar();
   const scrollY = useRef(0);
   const [lastScrollY, setLastScrollY] = useState(0);
+  const categoryScrollX = useRef(new Animated.Value(0)).current;
   
   // State for API data
   const [categories, setCategories] = useState<Category[]>([]);
@@ -158,14 +306,38 @@ export default function HomeScreen() {
         
         // Fetch all data in parallel
         const [categoriesData, productsData, shopsData] = await Promise.all([
-          api.getCategories(true).catch(() => []),
-          api.getProducts().catch(() => []),
-          api.getShops('approved').catch(() => []),
+          api.getCategories(true).catch((e) => {
+            // Avoid red error screen – log softly in dev and continue
+            if (__DEV__) {
+              console.log('Error fetching categories:', e?.message || e);
+            }
+            return [];
+          }),
+          api.getProducts().catch((e) => {
+            if (__DEV__) {
+              console.log('Error fetching products:', e?.message || e);
+            }
+            // Surface a friendly error once
+            setError((prev) => prev ?? (e?.message || 'Unable to load products right now.'));
+            return [];
+          }),
+          api.getShops('approved').catch((e) => {
+            if (__DEV__) {
+              console.log('Error fetching shops:', e?.message || e);
+            }
+            return [];
+          }),
         ]);
 
-        setCategories(categoriesData);
-        setProducts(productsData);
-        setShops(shopsData);
+        console.log('Fetched data:', {
+          categories: categoriesData.length,
+          products: productsData.length,
+          shops: shopsData.length,
+        });
+
+        setCategories(categoriesData || []);
+        setProducts(productsData || []);
+        setShops(shopsData || []);
       } catch (err: any) {
         console.error('Error fetching data:', err);
         setError(err.message || 'Failed to load data');
@@ -209,6 +381,19 @@ export default function HomeScreen() {
     setLastScrollY(currentScrollY);
     scrollY.current = currentScrollY;
   };
+
+  // Pager movement for category strip
+  const visibleCount = 4;
+  const maxScroll =
+    categories.length > visibleCount
+      ? (categories.length - visibleCount) * CATEGORY_ITEM_WIDTH
+      : 1;
+
+  const pagerTranslateX = categoryScrollX.interpolate({
+    inputRange: [0, maxScroll],
+    outputRange: [0, 20], // track width (40) - thumb width (20)
+    extrapolate: 'clamp',
+  });
 
   return (
     <ThemedView style={styles.wrapper}>
@@ -275,57 +460,122 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Green Banner */}
-        <View style={styles.banner}>
-          <ThemedText style={styles.bannerText}>
-            ✨ Shop campus favorites and locally crafted products – all in one place! ✨
-          </ThemedText>
-        </View>
+{/* Hero Top */}
+<LinearGradient
+    colors={['#10B981', '#14B8A6', '#F59E0B']}
+    start={{ x: 0, y: 0 }}
+    end={{ x: 1, y: 0 }}
+    style={styles.hero}
+  >
+    <View style={styles.heroContent}>
+      <View style={styles.heroIcon}>
+        <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+      </View>
 
-        {/* Background Section */}
-        <View style={styles.carouselContainer}>
-          <Image
-            source={require('@/assets/images/background.jpg')}
-            style={styles.carouselBackground}
-            contentFit="cover"
-          />
-        </View>
+      <ThemedText style={styles.heroText}>
+        Campus favorites & locally crafted products
+      </ThemedText>
+    </View>
+  </LinearGradient>
 
-        {/* Discover Fresh Picks Section - Full Width on Mobile */}
-        <View style={styles.discoverSection}>
-          <ThemedText type="title" style={styles.discoverTitle}>
-            <ThemedText style={styles.discoverTitleText}>Discover fresh picks from</ThemedText>{' '}
-            <ThemedText style={styles.titleHighlightGreen}>Campus Sellers</ThemedText>{' '}
-            <ThemedText style={styles.discoverTitleText}>&</ThemedText>{' '}
-            <ThemedText style={styles.titleHighlightOrange}>Local Makers</ThemedText>
-          </ThemedText>
-          <ThemedText style={styles.discoverDescription}>
-            Explore curated goods crafted by CNSC students and trusted local producers. Simple,
-            clean shopping designed for everyday cravings and useful essentials.
-          </ThemedText>
-          <View style={styles.discoverButtons}>
+  {/* Badges Bottom */}
+  <View style={styles.badgeRow}>
+    <View style={styles.badgeCard}>
+      <LinearGradient
+        colors={['#34D399', '#14B8A6']}
+        style={styles.badgeIcon}
+      >
+        <Ionicons name="bag-handle" size={16} color="#FFFFFF" />
+      </LinearGradient>
+      <ThemedText style={styles.badgeText}>Campus best-sellers</ThemedText>
+    </View>
+
+    <View style={styles.badgeCard}>
+      <LinearGradient
+        colors={['#38BDF8', '#34D399']}
+        style={styles.badgeIcon}
+      >
+        <Ionicons name="car" size={16} color="#FFFFFF" />
+      </LinearGradient>
+      <ThemedText style={styles.badgeText}>Fast pickup & delivery</ThemedText>
+    </View>
+
+    <View style={styles.badgeCard}>
+      <LinearGradient
+        colors={['#FBBF24', '#F43F5E']}
+        style={styles.badgeIcon}
+      >
+        <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" />
+      </LinearGradient>
+      <ThemedText style={styles.badgeText}>Trusted local sellers</ThemedText>
+    </View>
+  </View>
+
+        {/* Categories strip (horizontal, like Shopee quick features) */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLeft}>
+              <ThemedText style={styles.sectionLabel}>SHOP BY CATEGORY</ThemedText>
+              <ThemedText type="title" style={styles.sectionTitle}>
+                Browse categories
+              </ThemedText>
+            </View>
             <TouchableOpacity
-              style={styles.shopButton}
-              activeOpacity={0.8}
-              onPress={() => {
-                // Scroll to best sellers section or navigate to products
-                console.log('Shop popular picks pressed');
-              }}
+              activeOpacity={0.7}
+              onPress={() => router.push('/(tabs)/all-categories')}
             >
-              <ThemedText style={styles.shopButtonText}>Shop popular picks</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.exploreButton}
-              activeOpacity={0.8}
-              onPress={() => {
-                // Scroll to categories section
-                console.log('Explore categories pressed');
-              }}
-            >
-              <ThemedText style={styles.exploreButtonText}>Explore categories</ThemedText>
+              <ThemedText style={styles.viewAllLink}>View all →</ThemedText>
             </TouchableOpacity>
           </View>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#50C878" />
+            </View>
+          ) : categories.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <ThemedText style={styles.emptyText}>No categories available</ThemedText>
+            </View>
+          ) : (
+            <View>
+              <AnimatedFlatList
+                data={categories}
+                keyExtractor={(item: Category) => item.id}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryStrip}
+                onScroll={Animated.event(
+                  [{ nativeEvent: { contentOffset: { x: categoryScrollX } } }],
+                  { useNativeDriver: false }
+                )}
+                renderItem={({ item, index }: { item: Category; index: number }) => (
+                  <View style={styles.categoryStripItem}>
+                    <CategoryCard
+                      item={item}
+                      color={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}
+                      index={index}
+                    />
+                  </View>
+                )}
+              />
+
+              {/* Pager indicator */}
+              {categories.length > 4 && (
+                <View style={styles.categoryPager}>
+                  <View style={styles.categoryPagerTrack}>
+                    <Animated.View
+                      style={[
+                        styles.categoryPagerThumb,
+                        { transform: [{ translateX: pagerTranslateX }] },
+                      ]}
+                    />
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
         </View>
+
+        
 
         {/* Best Sellers This Week Section */}
         <View style={styles.section}>
@@ -350,61 +600,21 @@ export default function HomeScreen() {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#50C878" />
             </View>
-          ) : (
+          ) : products.length > 0 ? (
             <FlatList
               data={products.slice(0, 10)}
-              renderItem={({ item }) => <ProductCard item={item} />}
+              renderItem={({ item, index }) => <ProductCard item={item} index={index} />}
               keyExtractor={(item) => item.id}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.productList}
               scrollEnabled={true}
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <ThemedText style={styles.emptyText}>No products available</ThemedText>
-                </View>
-              }
             />
-          )}
-        </View>
-
-        {/* Shop by Category Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionHeaderLeft}>
-              <ThemedText style={styles.sectionLabel}>SHOP BY CATEGORY</ThemedText>
-              <ThemedText type="title" style={styles.sectionTitle}>
-                Browse categories
-              </ThemedText>
-            </View>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => router.push('/(tabs)/all-categories')}
-            >
-              <ThemedText style={styles.viewAllLink}>View all →</ThemedText>
-            </TouchableOpacity>
-          </View>
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color="#50C878" />
-            </View>
           ) : (
-            <FlatList
-              data={categories}
-              renderItem={({ item, index }) => (
-                <CategoryCard item={item} color={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
-              )}
-              keyExtractor={(item) => item.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoryList}
-              scrollEnabled={true}
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <ThemedText style={styles.emptyText}>No categories available</ThemedText>
-                </View>
-              }
-            />
+            <View style={styles.emptyContainer}>
+              <Ionicons name="cube-outline" size={48} color="#D1D5DB" />
+              <ThemedText style={styles.emptyText}>No products available</ThemedText>
+            </View>
           )}
         </View>
 
@@ -434,7 +644,7 @@ export default function HomeScreen() {
           ) : (
             <FlatList
               data={shops.slice(0, 10)}
-              renderItem={({ item }) => <VendorCard item={item} />}
+              renderItem={({ item, index }) => <VendorCard item={item} index={index} />}
               keyExtractor={(item) => item.id}
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -546,114 +756,70 @@ const styles = StyleSheet.create({
     color: '#7d7d7d',
   },
   banner: {
-    backgroundColor: '#50C878',
-    paddingVertical: 14,
+    paddingVertical: 18,
     paddingHorizontal: 20,
     marginHorizontal: 0,
   },
+  bannerContent: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  bannerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  bannerBadgeText: {
+    fontSize: 12,
+    color: '#FEFCE8',
+    fontWeight: '600',
+  },
   bannerText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    textAlign: 'center',
-    fontWeight: '500',
-    lineHeight: 20,
-    letterSpacing: 0.2,
+    fontSize: 18,
+    textAlign: 'left',
+    fontWeight: '600',
+    lineHeight: 26,
+    letterSpacing: 0.3,
   },
-  carouselContainer: {
-    height: 200,
-    width: '100%',
-    marginVertical: 20,
-    borderRadius: 0,
-    overflow: 'hidden',
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
-  carouselBackground: {
-    width: '100%',
-    height: '100%',
-  },
-  discoverSection: {
-    paddingHorizontal: 20,
-    marginBottom: 36,
-  },
-  discoverTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 14,
-    lineHeight: 36,
-  },
-  discoverTitleText: {
-    color: '#111827',
-    fontSize: 28,
-    fontWeight: '700',
+  errorBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#92400E',
   },
   titleHighlightGreen: {
     color: '#50C878',
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
   },
   titleHighlightOrange: {
     color: '#F5821F',
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
   },
   discoverDescription: {
     fontSize: 15,
     color: '#6B7280',
     lineHeight: 22,
-    marginBottom: 20,
-  },
-  discoverButtons: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-    flexWrap: 'wrap',
-  },
-  shopButton: {
-    backgroundColor: '#50C878',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 12,
-    flex: 1,
-    minWidth: 140,
-    alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#50C878',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  shopButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  exploreButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#50C878',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 12,
-    flex: 1,
-    minWidth: 140,
-    alignItems: 'center',
-  },
-  exploreButtonText: {
-    color: '#50C878',
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  discoverFooter: {
-    fontSize: 13,
-    color: '#999',
-    fontStyle: 'italic',
   },
   section: {
     paddingHorizontal: 20,
@@ -674,20 +840,21 @@ const styles = StyleSheet.create({
     color: '#50C878',
     fontWeight: '700',
     letterSpacing: 1.2,
-    marginBottom: 6,
+    padding: 12,
     textTransform: 'uppercase',
   },
   sectionTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     marginBottom: 6,
-    lineHeight: 30,
+    lineHeight: 28,
     color: '#111827',
   },
   sectionSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
-    lineHeight: 20,
+    lineHeight: 18,
+    marginTop: 2,
   },
   viewAllLink: {
     color: '#50C878',
@@ -695,46 +862,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
   },
-  categoryList: {
-    gap: 16,
+  // Horizontal category strip (home)
+  categoryStrip: {
+    paddingVertical: 8,
     paddingRight: 20,
   },
-  categoryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
-    width: 140,
+  categoryStripItem: {
+    width: 90,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 3,
-      },
-      android: {
-        elevation: 2,
-      },
-      web: {
-        boxShadow: '0px 1px 3px 0px rgba(0, 0, 0, 0.06)',
-      },
-    }),
+    marginRight: 16,
+  },
+  categoryCard: {
+    width: '100%',
+    alignItems: 'center',
   },
   categoryIconContainer: {
-    marginBottom: 12,
+    marginBottom: 8,
   },
   categoryIcon: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   categoryLabel: {
-    fontSize: 16,
-    marginBottom: 8,
+    fontSize: 13,
+    marginTop: 4,
     textAlign: 'center',
     color: '#000',
   },
@@ -752,29 +906,55 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
+  categoryItemCountEmpty: {
+    fontSize: 11,
+    color: '#9CA3AF',
+  },
+  categoryPager: {
+    marginTop: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryPagerTrack: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#F3F4F6',
+    overflow: 'hidden',
+  },
+  categoryPagerThumb: {
+    width: 20,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#F97316',
+  },
   productList: {
     gap: 16,
     paddingRight: 20,
   },
-  productCard: {
+  productCardWrapper: {
     width: 180,
+    marginRight: 0,
+  },
+  productCard: {
+    width: '100%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#F0F0F0',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 3,
+        elevation: 4,
       },
       web: {
-        boxShadow: '0px 2px 6px 0px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0px 4px 12px 0px rgba(0, 0, 0, 0.1)',
       },
     }),
   },
@@ -782,6 +962,41 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 180,
     backgroundColor: '#f8f8f8',
+    position: 'relative',
+  },
+  stockBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#50C878',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  stockBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  productPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF9E6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  ratingText: {
+    fontSize: 11,
+    color: '#F59E0B',
+    fontWeight: '600',
   },
   productImage: {
     width: '100%',
@@ -791,7 +1006,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f0f0f0',
     gap: 8,
   },
   noImageText: {
@@ -812,7 +1026,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#50C878',
     fontWeight: '700',
-    marginBottom: 4,
     letterSpacing: 0.2,
   },
   productShopName: {
@@ -827,22 +1040,22 @@ const styles = StyleSheet.create({
   vendorCard: {
     width: 200,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#F0F0F0',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 3,
+        elevation: 4,
       },
       web: {
-        boxShadow: '0px 2px 6px 0px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0px 4px 12px 0px rgba(0, 0, 0, 0.1)',
       },
     }),
   },
@@ -850,14 +1063,18 @@ const styles = StyleSheet.create({
     height: 120,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
   },
   vendorIcon: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   vendorCardBody: {
     padding: 18,
@@ -905,4 +1122,77 @@ const styles = StyleSheet.create({
     height: '100%',
     position: 'absolute',
   },
+  promoCard: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  
+  hero: {
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+  },
+  
+  heroContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  
+  heroIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  heroText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 20,
+    flex: 1,
+  },
+  
+  badgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  
+  badgeCard: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+  },
+  
+  badgeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  
+  badgeText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: '#374151',
+  },  
 });
