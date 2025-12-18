@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTabBar } from '@/contexts/tab-bar-context';
+import { useCart } from '@/contexts/cart-context';
 import { api, type Product, type Category, type Shop } from '@/lib/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -286,6 +287,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isVisible, setIsVisible } = useTabBar();
+  const { cartCount } = useCart();
   const scrollY = useRef(0);
   const [lastScrollY, setLastScrollY] = useState(0);
   const categoryScrollX = useRef(new Animated.Value(0)).current;
@@ -451,6 +453,13 @@ export default function HomeScreen() {
                 onPress={() => router.push('/(tabs)/cart')}
               >
                 <Ionicons name="cart" size={16} color="#fff" />
+                {cartCount > 0 && (
+                  <View style={styles.cartBadge}>
+                    <ThemedText style={styles.cartBadgeText}>
+                      {cartCount > 99 ? '99+' : cartCount}
+                    </ThemedText>
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -753,6 +762,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5821f',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  cartBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 13,
   },
   searchBar: {
     flexDirection: 'row',

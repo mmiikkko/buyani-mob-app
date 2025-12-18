@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -60,6 +60,7 @@ export default function MessagesScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const messagesScrollRef = useRef<ScrollView>(null);
 
   // Hide tab bar when screen is focused
   useFocusEffect(
@@ -71,66 +72,64 @@ export default function MessagesScreen() {
     }, [setIsVisible])
   );
 
+  // Fetch user when screen mounts/focuses
   useEffect(() => {
     const fetchUser = async () => {
       try {
         const token = await api.getToken();
-        if (token) {
-          const user = await api.getCurrentUser();
-          setCurrentUserId(user?.id || null);
+        if (!token || token === 'demo-token-offline-mode') {
+          console.log('MessagesScreen: No token found');
+          return;
         }
-      } catch (error) {
+
+        const user = await api.getCurrentUser();
+        setCurrentUserId(user?.id || null);
+      } catch (error: any) {
         console.error('Error fetching user:', error);
+        if (error.status === 401) {
+          router.replace('/login');
+        }
       }
     };
     fetchUser();
-  }, []);
+  }, [router]);
 
   const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://buyani-ecommerce-app-2kse.vercel.app/api';
 
   const fetchConversations = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) setLoading(true);
+      
       const token = await api.getToken();
-      if (!token) return;
+      if (!token) {
+        console.log('fetchConversations: No token available');
+        if (showLoading) setLoading(false);
+        setRefreshing(false);
+        return;
+      }
 
-      const response = await fetch(`${API_BASE_URL}/conversations`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      console.log('fetchConversations: Fetching conversations...');
+      const data = await api.getConversations();
+      console.log('fetchConversations: Received conversations:', data, 'Count:', data?.length || 0);
 
-      if (response.ok) {
-        const data = await response.json();
-        
+      if (data && Array.isArray(data)) {
         // Fetch last message for each conversation
         const conversationsWithLastMessage = await Promise.all(
           data.map(async (conv: Conversation) => {
             try {
-              const msgResponse = await fetch(`${API_BASE_URL}/conversations/${conv.id}/messages`, {
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-              });
+              const messages = await api.getMessages(conv.id);
+              const lastMessage = messages && messages.length > 0 
+                ? messages[messages.length - 1] 
+                : null;
               
-              if (msgResponse.ok) {
-                const messages = await msgResponse.json();
-                const lastMessage = messages && messages.length > 0 
-                  ? messages[messages.length - 1] 
-                  : null;
-                
-                return {
-                  ...conv,
-                  lastMessage: lastMessage ? {
-                    content: lastMessage.content,
-                    senderId: lastMessage.senderId,
-                    createdAt: lastMessage.createdAt,
-                  } : undefined,
-                };
-              }
-              return conv;
+              return {
+                ...conv,
+                lastMessage: lastMessage ? {
+                  content: lastMessage.content,
+                  senderId: lastMessage.senderId,
+                  createdAt: lastMessage.createdAt,
+                } : undefined,
+              };
             } catch (error) {
               console.error(`Error fetching last message for conversation ${conv.id}:`, error);
               return conv;
@@ -138,48 +137,99 @@ export default function MessagesScreen() {
           })
         );
         
+        console.log('fetchConversations: Setting conversations, count:', conversationsWithLastMessage.length);
         setConversations(conversationsWithLastMessage);
+        
+        // Auto-select first conversation if none selected
+        if (!selectedConversation && conversationsWithLastMessage.length > 0) {
+          console.log('fetchConversations: Auto-selecting first conversation:', conversationsWithLastMessage[0].id);
+          setSelectedConversation(conversationsWithLastMessage[0].id);
+        }
+      } else {
+        console.log('fetchConversations: No valid data received, setting empty array');
+        setConversations([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching conversations:', error);
+      console.error('Error details:', error.message, error.status);
+      
+      // Handle 401 Unauthorized - redirect to login
+      if (error.status === 401 || error.message?.includes('Unauthorized')) {
+        console.log('fetchConversations: Unauthorized, redirecting to login');
+        router.replace('/login');
+        return;
+      }
+      
+      // Set empty array on other errors
+      setConversations([]);
     } finally {
       if (showLoading) setLoading(false);
       setRefreshing(false);
     }
-  }, [API_BASE_URL]);
+  }, [selectedConversation, router]);
 
   const fetchMessages = useCallback(
     async (convId: string) => {
+      if (!convId) {
+        console.log('fetchMessages: No conversation ID provided');
+        return;
+      }
+
       try {
         setLoadingMessages(true);
+        console.log('fetchMessages: Fetching messages for conversation:', convId);
+        
         const token = await api.getToken();
-        if (!token) return;
+        if (!token) {
+          console.log('fetchMessages: No token available');
+          return;
+        }
 
-        const response = await fetch(`${API_BASE_URL}/conversations/${convId}/messages`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        const data = await api.getMessages(convId);
+        console.log('fetchMessages: Received data:', data, 'Count:', data?.length || 0);
 
-        if (response.ok) {
-          const data = await response.json();
+        if (data && Array.isArray(data)) {
+          // Deduplicate messages by ID
           const uniqueMessages = Array.from(
             new Map(data.map((msg: Message) => [msg.id, msg])).values()
           ) as Message[];
-          setMessages(uniqueMessages);
+          // Sort messages by creation date (oldest first)
+          const sortedMessages = uniqueMessages.sort((a, b) => 
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+          console.log('fetchMessages: Setting messages, count:', sortedMessages.length);
+          setMessages(sortedMessages);
+
+          // Scroll to bottom after messages load
+          setTimeout(() => {
+            messagesScrollRef.current?.scrollToEnd({ animated: true });
+          }, 100);
 
           if (selectedConversation === convId) {
             setUnreadCounts((prev) => ({ ...prev, [convId]: 0 }));
           }
+        } else {
+          console.log('fetchMessages: No valid data received, setting empty array');
+          setMessages([]);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching messages:', error);
+        console.error('Error details:', error.message, error.status);
+        
+        // Handle 401 Unauthorized - redirect to login
+        if (error.status === 401 || error.message?.includes('Unauthorized')) {
+          console.log('fetchMessages: Unauthorized, redirecting to login');
+          router.replace('/login');
+          return;
+        }
+        
+        // Set empty array on other errors to show empty state
+        setMessages([]);
       } finally {
         setLoadingMessages(false);
       }
     },
-    [selectedConversation, API_BASE_URL]
+    [selectedConversation, router]
   );
 
   const fetchUnreadCounts = useCallback(async (convs: Conversation[]) => {
@@ -193,41 +243,54 @@ export default function MessagesScreen() {
       await Promise.all(
         convs.map(async (conv) => {
           try {
-            const response = await fetch(`${API_BASE_URL}/conversations/${conv.id}/messages`, {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-            });
-            if (response.ok) {
-              const msgs = await response.json();
-              const unread = msgs.filter(
-                (m: Message) => m.senderId !== currentUserId && !m.isRead
-              ).length;
-              counts[conv.id] = unread;
-            }
-          } catch (error) {
+            const msgs = await api.getMessages(conv.id);
+            const unread = msgs.filter(
+              (m: Message) => m.senderId !== currentUserId && !m.isRead
+            ).length;
+            counts[conv.id] = unread;
+          } catch (error: any) {
             console.error(`Error fetching unread count for conversation ${conv.id}:`, error);
+            // Don't throw, just skip this conversation
+            if (error.status === 401) {
+              // If unauthorized, stop fetching unread counts
+              throw error;
+            }
           }
         })
       );
       setUnreadCounts(counts);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching unread counts:', error);
+      // Don't redirect on unread count errors, just log
     }
-  }, [currentUserId, API_BASE_URL]);
+  }, [currentUserId]);
 
-  useEffect(() => {
-    fetchConversations(true);
-  }, [fetchConversations]);
+  // Fetch conversations when screen is focused or when component mounts
+  useFocusEffect(
+    useCallback(() => {
+      const token = api.getToken();
+      token.then((t) => {
+        if (t && t !== 'demo-token-offline-mode') {
+          fetchConversations(true);
+        }
+      }).catch(() => {
+        // Token check failed, will be handled by fetchConversations
+        fetchConversations(true);
+      });
+    }, [fetchConversations])
+  );
 
   useEffect(() => {
     if (selectedConversation) {
+      console.log('useEffect: Selected conversation changed to:', selectedConversation);
       fetchMessages(selectedConversation);
       const interval = setInterval(() => {
         fetchMessages(selectedConversation);
       }, 3000);
       return () => clearInterval(interval);
+    } else {
+      console.log('useEffect: No conversation selected, clearing messages');
+      setMessages([]);
     }
   }, [selectedConversation, fetchMessages]);
 
@@ -248,12 +311,38 @@ export default function MessagesScreen() {
   }, [fetchConversations]);
 
   const sendMessage = useCallback(async () => {
-    if (!selectedConversation || !messageContent.trim()) return;
+    if (!selectedConversation || !messageContent.trim() || !currentUserId) return;
+
+    const trimmedContent = messageContent.trim();
+    
+    // Create optimistic message to show immediately
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`,
+      conversationId: selectedConversation,
+      senderId: currentUserId,
+      content: trimmedContent,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Immediately add the message to state and clear input
+    setMessages((prev) => [...prev, optimisticMessage]);
+    setMessageContent('');
+    
+    // Scroll to bottom after adding message
+    setTimeout(() => {
+      messagesScrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
 
     try {
       setSending(true);
       const token = await api.getToken();
-      if (!token) return;
+      if (!token) {
+        // Revert optimistic update on auth failure
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticMessage.id));
+        setMessageContent(trimmedContent);
+        return;
+      }
 
       const response = await fetch(
         `${API_BASE_URL}/conversations/${selectedConversation}/messages`,
@@ -263,21 +352,32 @@ export default function MessagesScreen() {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ content: messageContent.trim() }),
+          body: JSON.stringify({ content: trimmedContent }),
         }
       );
 
       if (response.ok) {
-        setMessageContent('');
-        fetchMessages(selectedConversation);
+        const newMessage = await response.json();
+        // Replace optimistic message with real one from server
+        setMessages((prev) => 
+          prev.map((m) => m.id === optimisticMessage.id ? newMessage : m)
+        );
+      } else {
+        // Revert optimistic update on API error
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticMessage.id));
+        setMessageContent(trimmedContent);
+        Alert.alert('Error', 'Failed to send message. Please try again.');
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      // Revert optimistic update on network error
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMessage.id));
+      setMessageContent(trimmedContent);
       Alert.alert('Error', 'Failed to send message. Please try again.');
     } finally {
       setSending(false);
     }
-  }, [selectedConversation, messageContent, fetchMessages, API_BASE_URL]);
+  }, [selectedConversation, messageContent, currentUserId, API_BASE_URL]);
 
   const deleteConversation = useCallback(async (convId: string) => {
     try {
@@ -378,12 +478,23 @@ export default function MessagesScreen() {
         {loadingMessages ? (
           <View style={styles.centerContainer}>
             <ActivityIndicator size="large" color="#10B981" />
+            <ThemedText style={styles.loadingText}>Loading messages...</ThemedText>
           </View>
         ) : (
           <ScrollView
+            ref={messagesScrollRef}
             style={styles.messagesScroll}
             contentContainerStyle={styles.messagesContent}
             showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => {
+              messagesScrollRef.current?.scrollToEnd({ animated: true });
+            }}
+            onLayout={() => {
+              // Scroll to bottom when layout changes
+              setTimeout(() => {
+                messagesScrollRef.current?.scrollToEnd({ animated: false });
+              }, 100);
+            }}
           >
             {messages.length === 0 ? (
               <View style={styles.centerContainer}>
@@ -397,17 +508,24 @@ export default function MessagesScreen() {
                 return (
                   <View
                     key={msg.id}
-                    style={[styles.messageBubble, isOwn ? styles.messageOwn : styles.messageOther]}
+                    style={[
+                      styles.messageWrapper,
+                      isOwn ? styles.messageWrapperOwn : styles.messageWrapperOther,
+                    ]}
                   >
-                    <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>
-                      {msg.content}
-                    </Text>
-                    <Text style={[styles.messageTime, isOwn && styles.messageTimeOwn]}>
-                      {new Date(msg.createdAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Text>
+                    <View
+                      style={[styles.messageBubble, isOwn ? styles.messageOwn : styles.messageOther]}
+                    >
+                      <Text style={[styles.messageText, isOwn && styles.messageTextOwn]}>
+                        {msg.content}
+                      </Text>
+                      <Text style={[styles.messageTime, isOwn && styles.messageTimeOwn]}>
+                        {new Date(msg.createdAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </Text>
+                    </View>
                   </View>
                 );
               })
@@ -771,20 +889,28 @@ const styles = StyleSheet.create({
   messagesContent: {
     padding: 16,
     paddingBottom: 20,
+    flexGrow: 1,
+  },
+  messageWrapper: {
+    marginBottom: 12,
+    width: '100%',
+  },
+  messageWrapperOwn: {
+    alignItems: 'flex-end',
+  },
+  messageWrapperOther: {
+    alignItems: 'flex-start',
   },
   messageBubble: {
     maxWidth: '75%',
-    marginBottom: 12,
     padding: 12,
     borderRadius: 16,
   },
   messageOwn: {
-    alignSelf: 'flex-end',
     backgroundColor: '#10B981',
     borderBottomRightRadius: 4,
   },
   messageOther: {
-    alignSelf: 'flex-start',
     backgroundColor: '#F3F4F6',
     borderBottomLeftRadius: 4,
   },
@@ -856,4 +982,21 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+  loadingText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 12,
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 8,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
 });
+
+
+
+
+
+

@@ -181,6 +181,14 @@ function TabLayoutContent() {
         name="messages"
         options={hiddenScreenOptions}
       />
+      <Tabs.Screen
+        name="product"
+        options={hiddenScreenOptions}
+      />
+      <Tabs.Screen
+        name="shop"
+        options={hiddenScreenOptions}
+      />
       </Tabs>
     </>
   );

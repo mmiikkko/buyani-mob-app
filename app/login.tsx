@@ -148,49 +148,34 @@ export default function LoginScreen() {
         }
       }, 300);
     } catch (e: any) {
+      console.error('Login error:', e);
+      
+      // Extract error message
+      let errorMessage = 'Something went wrong. Please try again.';
+      if (e.message) {
+        errorMessage = e.message;
+      } else if (e.error) {
+        errorMessage = e.error;
+      } else if (typeof e === 'string') {
+        errorMessage = e;
+      }
+      
       // Check if it's a network/server connection error
-      const isNetworkError = e.message?.includes('Cannot connect to server') || 
-                            e.message?.includes('Network request failed') ||
-                            e.message?.includes('Failed to fetch');
+      const isNetworkError = errorMessage.includes('Cannot connect to server') || 
+                            errorMessage.includes('Network request failed') ||
+                            errorMessage.includes('Failed to fetch') ||
+                            errorMessage.includes('timeout') ||
+                            errorMessage.includes('network');
       
       if (isNetworkError) {
-        // For network errors, allow demo mode - store a demo token and proceed
-        // This allows users to see the UI even when backend is unavailable
-        await api.setToken('demo-token-offline-mode');
-        
-        // Show a warning but still proceed
+        // For network errors, show error but don't proceed
         setError(
-          '⚠️ Cannot connect to server. Continuing in offline mode. ' +
-          'Some features may not work until the server is available.'
+          `⚠️ ${errorMessage}\n\nPlease check your internet connection and try again.`
         );
-        
         setLoading(false);
-        
-        // Navigate after a brief delay to show the warning
-        setTimeout(() => {
-          // Smooth fade-out transition before navigation
-          opacity.value = withTiming(0, {
-            duration: 300,
-            easing: Easing.in(Easing.ease),
-          });
-          translateY.value = withTiming(-20, {
-            duration: 300,
-            easing: Easing.in(Easing.ease),
-          });
-
-          setTimeout(async () => {
-            try {
-              await api.getCurrentUser();
-            } catch {
-              // ignore; offline/demo mode
-            }
-            // Even in offline/demo mode, always land on customer home first.
-            router.replace('/(tabs)' as Href);
-          }, 300);
-        }, 1500);
       } else {
         // For other errors (invalid credentials, etc.), show the error
-        setError(e.message || 'Something went wrong. Please try again.');
+        setError(errorMessage);
         setLoading(false);
       }
     }

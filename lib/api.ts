@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://buyani-ecommerce-app-2kse.vercel.app/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://buyani-webapp.vercel.app/api';
 
 // Base URL for the web app (used for things like forgot-password flows)
 // If API is .../api, the web base is everything before /api
@@ -116,6 +116,7 @@ export interface OrderPayload {
     province: string;
     zipcode: string;
     country: string;
+    contactNumber?: string;
     deliveryNotes?: string;
   };
   paymentMethod: 'cod' | 'gcash' | string;
@@ -426,16 +427,70 @@ class ApiClient {
   }
 
   async login(data: LoginRequest): Promise<AuthResponse> {
-    const response = await this.request<AuthResponse>('/auth/mobile-login', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    // Persist token and role immediately so the app knows the role right after login
-    await this.setToken(response.token);
-    if (response.user?.role) {
-      await this.setUserRole(response.user.role);
+    try {
+      // Don't include Authorization header for login - user is not authenticated yet
+      const url = `${this.baseUrl}/auth/mobile-login`;
+      
+      if (__DEV__) {
+        console.log(`📡 Login Request: POST ${url}`);
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        let errorMessage = `Login failed (Status: ${response.status})`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+          if (__DEV__) {
+            console.error('❌ Login API Error:', errorData);
+          }
+        } catch (jsonError) {
+          try {
+            const text = await response.text();
+            if (text) {
+              errorMessage = text.substring(0, 200);
+              if (__DEV__) {
+                console.error('❌ Login API Error (text):', text);
+              }
+            }
+          } catch (textError) {
+            if (__DEV__) {
+              console.error('❌ Login API Error: Could not parse error response');
+            }
+          }
+        }
+        const loginError = new Error(errorMessage);
+        (loginError as any).status = response.status;
+        throw loginError;
+      }
+
+      const result = await response.json();
+      
+      // Persist token and role immediately so the app knows the role right after login
+      await this.setToken(result.token);
+      if (result.user?.role) {
+        await this.setUserRole(result.user.role);
+      }
+      
+      return result;
+    } catch (error: any) {
+      // Log full error for debugging
+      if (__DEV__) {
+        console.error('❌ Login catch error:', error);
+      }
+      // Re-throw with clear error message
+      if (error.message) {
+        throw error;
+      }
+      throw new Error(error.message || 'Failed to login. Please check your credentials and try again.');
     }
-    return response;
   }
 
   // Trigger a password reset email using the web auth flow
@@ -654,7 +709,14 @@ class ApiClient {
     return this.request<Order[]>('/orders');
   }
 
-  async createOrder(payload: OrderPayload): Promise<{ success: boolean; orderId: string; subtotal: number; paymentMethod: string; message: string }> {
+  async createOrder(payload: OrderPayload): Promise<{ 
+    success: boolean; 
+    orderId: string; 
+    orders?: Array<{ orderId: string; shopId: string; shopName: string; subtotal: number }>;
+    subtotal: number; 
+    paymentMethod: string; 
+    message: string;
+  }> {
     return this.request('/orders', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -709,6 +771,19 @@ class ApiClient {
     const url = `/addresses?id=${encodeURIComponent(addressId)}`;
     return this.request(url, {
       method: 'DELETE',
+    });
+  }
+
+  // Payments API
+  async createGCashPayment(data: {
+    orderId: string;
+    orderIds?: string[];
+    amount: number;
+    description?: string;
+  }): Promise<{ checkoutUrl: string; checkoutSessionId: string }> {
+    return this.request('/payments/gcash', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   }
 
@@ -845,6 +920,59 @@ class ApiClient {
     return this.request('/sellers/shop', {
       method: 'PUT',
       body: JSON.stringify(updates),
+    });
+  }
+
+  // Conversation and Message APIs
+  async getConversations(): Promise<Array<{
+    id: string;
+    customerId: string;
+    sellerId: string;
+    productId: string | null;
+    lastMessageAt: string;
+    customerName: string;
+    sellerName: string;
+    productName: string | null;
+  }>> {
+    return this.request('/conversations');
+  }
+
+  async getMessages(conversationId: string): Promise<Array<{
+    id: string;
+    conversationId: string;
+    senderId: string;
+    content: string;
+    isRead: boolean;
+    createdAt: string;
+  }>> {
+    return this.request(`/conversations/${conversationId}/messages`);
+  }
+
+  async sendMessage(conversationId: string, content: string): Promise<{
+    id: string;
+    conversationId: string;
+    senderId: string;
+    content: string;
+    isRead: boolean;
+    createdAt: string;
+  }> {
+    return this.request(`/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  async createConversation(sellerId: string, productId?: string): Promise<{
+    id: string;
+    customerId: string;
+    sellerId: string;
+    productId: string | null;
+    lastMessageAt: string;
+    createdAt: string;
+  }> {
+    return this.request('/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ sellerId, productId: productId || null }),
     });
   }
 }
